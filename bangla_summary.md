@@ -169,7 +169,7 @@ Problem
 | Mode | কী হয় | সময় (T4 GPU) | কখন ব্যবহার |
 |---|---|---|---|
 | `"QUICK"` | ৬,০০০ comment, ৩ federated round, BanglaT5 train হয় না | ~১০–১৫ মিনিট | ছোট demo |
-| `"FULL"` | সব comment, ৭ round, BanglaT5 train হয় | ~১.৫–২ ঘণ্টা | **থিসিসের সংখ্যা এখান থেকে নিতে হবে** |
+| `"FULL"` | সব comment, ৭ round, BanglaT5 train হয় | ~২–২.৫ ঘণ্টা | **থিসিসের সংখ্যা এখান থেকে নিতে হবে** |
 
 3. `Runtime → Run all`।
 
@@ -468,28 +468,32 @@ Blockchain হলো **block-এর একটা তালিকা**। প্�
 
 **Validation set কেন?** সেরা federated round বাছাই আর threshold tuning — এসব সিদ্ধান্ত test set দেখে নিলে test score আর নিরপেক্ষ থাকে না। তাই আলাদা validation set।
 
-### ৪.২ Under-sampling (শুধু training set-এ)
+### ৪.২ Over-sampling (শুধু training set-এ, প্রতিটা client-এর ভেতরে)
 
-- সব ক্ষতিকর comment রাখা হয়।
-- `normal` রাখা হয় সর্বোচ্চ **2 × (সবচেয়ে বড় ক্ষতিকর class)**। (`NORMAL_RATIO = 2.0`)
+- প্রথমে training data ৩টা client-এ ভাগ করা হয় (`split_into_clients`)। Baseline আর improved — দুই run-ই **একই client ভাগ** ব্যবহার করে।
+- প্রতিটা client **নিজের data-তেই** balance করে — কোনো comment এক client থেকে অন্য client-এ যায় না (federated learning-এর নিয়ম)।
+- `split_into_clients`: আগে label অনুযায়ী সাজিয়ে তাস বাটার মতো একে একে দেওয়া হয় — ফলে প্রতিটা client-এর class mix প্রায় একই।
+- **কোনো comment বাদ দেওয়া হয় না।** ছোট ক্ষতিকর class-গুলোর comment বারবার (copy করে) রাখা হয়, যতক্ষণ না প্রতিটা class সবচেয়ে বড় ক্ষতিকর class-এর অন্তত **75%** হয় (`OVERSAMPLE_TO = 0.75`)।
 
-| Class | আগে | পরে |
+| Class | আগে (৩ client মিলিয়ে) | পরে |
 |---|---|---|
-| normal | 25,309 | **14,130** (= 2 × 7,065) |
+| normal | 25,309 | 25,309 (সব রাখা) |
 | offensive | 7,065 | 7,065 |
-| cyberbully | 2,069 | 2,069 |
-| hate_speech | 4,106 | 4,106 |
-| violence | 4,226 | 4,226 |
+| cyberbully | 2,069 | ≈ 5,298 (≈ 2.6 গুণ) |
+| hate_speech | 4,106 | ≈ 5,298 |
+| violence | 4,226 | ≈ 5,298 |
 
-**Imbalance: 12.2x → 6.8x।** চার্ট: `2_balancing.png`।
+**Imbalance: 12.2x → ≈ 4.8x** (হিসাব করে যাচাই করা; FULL run-এর পর চার্ট `2_balancing.png`-এ আসল সংখ্যা আসবে)।
 
-**কেন normal পুরো সমান করা হয়নি?** পুরো সমান করলে অনেক normal উদাহরণ হারাত, model normal ভালোভাবে চিনত না, আর নিরীহ লেখাকেও ক্ষতিকর বলত। আগে `NORMAL_RATIO = 1.5` ছিল — তখন QUICK run-এ সাধারণ user `user_A` কে ভুল করে Medium risk দেখাচ্ছিল। তাই 2.0 করা হয়েছে (normal-এর recall বেশি থাকে, false positive কমে)।
+**কেন আগের under-sampling বাদ দেওয়া হলো?** আগে `normal` comment কমিয়ে ফেলা হতো (সর্বোচ্চ 2 × সবচেয়ে বড় ক্ষতিকর class, অর্থাৎ 25,309 → 14,130)। দুটো FULL run-এই এতে macro F1 baseline-এর সমান থেকে গেছে (0.6286 বনাম 0.6277, আর 0.6308 বনাম 0.6302)। কারণ: model ~11,000টা normal উদাহরণ হারাত, আর threshold tuning সেই ঝোঁক প্রায় পুরোটা উল্টে দিত (সব ক্ষতিকর class-এর bias ঋণাত্মক এসেছিল)। Over-sampling-এ কোনো data হারায় না।
+
+**কেন পুরো সমান (100%) না, 75%?** Cyberbully-কে পুরো সমান করতে গেলে একই comment অনেকবার দেখতে হতো — model সেগুলো মুখস্থ করে ফেলত (overfitting)।
 
 ### Class weight কেন বন্ধ (`USE_CLASS_WEIGHTS = False`)
 
 Class weight মানে loss হিসাবের সময় ছোট class-এর ভুলকে বেশি গুরুত্ব দেওয়া। কোডে এটা আছে (`sqrt(total / (5 × class_count))`, প্রতিটা client **শুধু নিজের data** থেকে হিসাব করে), কিন্তু বন্ধ রাখা হয়েছে।
 
-**কারণ:** under-sampling-এর সাথে class weight একসাথে দিলে imbalance **দুবার** ঠিক করা হয়ে যায়। FULL run-এ দেখা গেছে: model অনেক বেশি comment-কে ক্ষতিকর বলছিল (recall অনেক বেশি, precision কম), `normal`-এর F1 কমেছিল, আর macro F1 বাড়েনি। চাইলে `True` দিয়ে পরীক্ষাটা আবার করা যায়।
+**কারণ:** re-sampling-এর সাথে class weight একসাথে দিলে imbalance **দুবার** ঠিক করা হয়ে যায়। FULL run-এ দেখা গেছে: model অনেক বেশি comment-কে ক্ষতিকর বলছিল (recall অনেক বেশি, precision কম), `normal`-এর F1 কমেছিল, আর macro F1 বাড়েনি। চাইলে `True` দিয়ে পরীক্ষাটা আবার করা যায়।
 
 ---
 
@@ -513,7 +517,6 @@ Class weight মানে loss হিসাবের সময় ছোট clas
 | Function | কাজ |
 |---|---|
 | `make_loader` | comment-কে token id-র batch বানায় (BanglaBERT tokenizer)। |
-| `split_into_clients` | data ৩ ভাগ করে। আগে label অনুযায়ী সাজিয়ে তাস বাটার মতো একে একে দেওয়া হয় — ফলে প্রতিটা client-এর class mix প্রায় একই। |
 | `new_model` | BanglaBERT + একটা ৫-class classification layer। |
 | `train_local` | এক client-এর local training: AdamW optimizer, mixed precision, **gradient clipping (1.0)** যাতে হঠাৎ খুব বড় update না হয়। |
 | `fed_avg` | নতুন weight = Σ (client-এর weight × client-এর data / মোট data)। Integer buffer (যেমন position id) গড় করা হয় না। |
@@ -538,13 +541,13 @@ GPU memory বাঁচাতে প্রতিটা client-এর পর loca
 | Run | Training data | Loss | সিদ্ধান্ত |
 |---|---|---|---|
 | **Baseline** | মূল (imbalanced) | সাধারণ cross-entropy | সবচেয়ে বেশি probability-র class |
-| **Improved** | normal under-sampled | সাধারণ cross-entropy | validation set-এ tune করা **per-class threshold** |
+| **Improved** | ছোট ক্ষতিকর class over-sampled | সাধারণ cross-entropy | validation set-এ tune করা **per-class threshold** |
 
 দুটোই **একই federated setup**-এ train, আর **একই অছোঁয়া test set**-এ পরীক্ষা — তাই তুলনা ন্যায্য।
 
 ### ৬.১ Baseline আর Improved train করা
 
-`RUN_BASELINE = True` হলে আগে baseline train হয়, test-এ মূল্যায়ন, তারপর GPU memory খালি করে improved model train হয়। Threshold tuning-এর **আগের** ফলাফলও রাখা হয় (`undersampled_result`), যাতে প্রতিটা ধাপের প্রভাব আলাদা করে দেখা যায়।
+`RUN_BASELINE = True` হলে আগে baseline train হয়, test-এ মূল্যায়ন, তারপর GPU memory খালি করে improved model train হয়। Threshold tuning-এর **আগের** ফলাফলও রাখা হয় (`oversampled_result`), যাতে প্রতিটা ধাপের প্রভাব আলাদা করে দেখা যায়।
 
 ### ৬.২ Threshold tuning (validation set-এ)
 
@@ -563,7 +566,7 @@ Final model আর তার bias সেভ হয় `outputs/final_classifier/
 
 ### ৬.৩ Per-class F1 টেবিল ও চার্ট
 
-টেবিলে থাকে: `baseline_F1`, `undersampled_F1`, `improved_F1`, আর `change` (improved − baseline), সাথে MACRO F1 আর ACCURACY। সেভ হয় `per_class_f1.csv` আর `3_per_class_f1.png`।
+টেবিলে থাকে: `baseline_F1`, `oversampled_F1`, `improved_F1`, আর `change` (improved − baseline), সাথে MACRO F1 আর ACCURACY। সেভ হয় `per_class_f1.csv` আর `3_per_class_f1.png`।
 
 **কেন macro F1, শুধু accuracy না?** Accuracy বিভ্রান্তিকর: ৫৯% data normal, তাই সবকিছুকে "normal" বললেও accuracy ৫৯%! Macro F1 হলো ৫টা class-এর F1-এর সাধারণ গড় — ছোট class খারাপ করলে এটা কমে যায়। Problem 2 ঠিক এটাই চায়: **প্রতিটা class** ভালো করা।
 
@@ -575,27 +578,26 @@ Final model আর তার bias সেভ হয় `outputs/final_classifier/
 
 ### সেভ করা run-এ ফলাফল
 
-> ⚠️ **গুরুত্বপূর্ণ:** নোটবুকে এখন যে output সেভ আছে সেটা **একটা পুরনো run-এর** — তখন ৫ round ছিল, class weight চালু ছিল, আর threshold tuning ছিল না। বর্তমান কোড (৭ round, class weight বন্ধ, threshold tuning চালু) দিয়ে আবার **FULL mode-এ চালিয়ে নতুন সংখ্যা** থিসিসে ব্যবহার করতে হবে।
+> ⚠️ **গুরুত্বপূর্ণ:** নিচের সংখ্যাগুলো **under-sampling-এর সাথে শেষ FULL run-এর** (৭ round, class weight বন্ধ, threshold tuning চালু)। এখন কোডে **over-sampling** — তাই আবার **FULL mode-এ চালিয়ে নতুন সংখ্যা** থিসিসে ব্যবহার করতে হবে।
 
-পুরনো run-এর test set ফলাফল:
+শেষ run-এর test set ফলাফল:
 
-| Class | Baseline F1 | Improved F1 | পরিবর্তন |
-|---|---|---|---|
-| normal | 0.8616 | 0.8423 | −0.0193 |
-| offensive | 0.7560 | 0.7471 | −0.0089 |
-| cyberbully | 0.3479 | 0.3629 | **+0.0150** |
-| hate_speech | 0.5907 | 0.5915 | **+0.0008** |
-| violence | 0.5869 | 0.5948 | **+0.0079** |
-| **MACRO F1** | 0.6286 | 0.6277 | −0.0009 |
-| **ACCURACY** | 0.7661 | 0.7444 | −0.0217 |
+| Class | Baseline F1 | Under-sampling | + threshold (improved) | পরিবর্তন |
+|---|---|---|---|---|
+| normal | 0.8606 | 0.8537 | 0.8583 | −0.0023 |
+| offensive | 0.7581 | 0.7490 | 0.7520 | −0.0061 |
+| cyberbully | 0.3464 | 0.3430 | 0.3487 | +0.0023 |
+| hate_speech | 0.5910 | 0.6045 | 0.6019 | +0.0109 |
+| violence | 0.5981 | 0.5954 | 0.5900 | −0.0081 |
+| **MACRO F1** | 0.6308 | 0.6291 | 0.6302 | −0.0006 |
+| **ACCURACY** | 0.7638 | 0.7585 | 0.7625 | −0.0013 |
+
+(তার আগের run — under-sampling + class weight, ৫ round: macro F1 0.6286 → 0.6277।)
 
 **কীভাবে পড়তে হবে:**
-- তিনটা ছোট ক্ষতিকর class (cyberbully, hate_speech, violence)-এর F1 বেড়েছে — imbalance ঠিক করার প্রভাব।
-- কিন্তু normal আর offensive একটু কমেছে, তাই macro F1 প্রায় একই (সামান্য কম)। অর্থাৎ **ওই run-এ Problem 2 পুরোপুরি সমাধান হয়নি** (checklist-এ ✘)।
-- Accuracy কমা প্রত্যাশিত: baseline প্রায় সবকিছুকে "normal" বলে বেশি accuracy পায়।
-- এই ফলাফল দেখেই পরে class weight বন্ধ করা হয় (দ্বিগুণ সংশোধন হচ্ছিল), round ৭ করা হয়, আর **threshold tuning** যোগ করা হয়। নতুন run-এ এগুলোর প্রভাব দেখতে হবে।
-
-Improved model-এর বিস্তারিত (পুরনো run): normal-এর precision 0.91 কিন্তু recall 0.78; ক্ষতিকর class-গুলোর recall precision-এর চেয়ে বেশি (যেমন cyberbully: precision 0.31, recall 0.44)। মানে model ক্ষতিকর জিনিস বেশি ধরছে, কিন্তু কিছু নিরীহ জিনিসকেও ক্ষতিকর বলছে।
+- দুই run-এই পরিবর্তনগুলো ±0.01-এর মধ্যে। একই setup দুবার চালালেই baseline 0.6286 আর 0.6308 এসেছে — অর্থাৎ এত ছোট পার্থক্য **random noise**, উন্নতি বা অবনতি কোনোটাই না। **Problem 2 এখনো সমাধান হয়নি** (checklist-এ ✘)।
+- Threshold tuning-এ সব ক্ষতিকর class-এর bias **ঋণাত্মক** এসেছে (−0.2 থেকে −0.6)। মানে under-sampling model-কে বেশি "ক্ষতিকর"-এর দিকে ঠেলে দিয়েছিল, আর tuning সেটা প্রায় পুরো ফিরিয়ে দিয়েছে। শেষে ফল = baseline, শুধু ~11,000 কম normal উদাহরণ দিয়ে। এজন্যই এখন over-sampling।
+- **Confusion matrix থেকে আসল সমস্যা:** baseline প্রায় সবকিছুকে "normal" বলে **না** — normal-এর recall 0.85। বড় ভুলগুলো হলো (১) normal comment-কে ক্ষতিকর বলা (7,030-এর মধ্যে 1,086), আর (২) cyberbully আর hate_speech গুলিয়ে ফেলা। Cyberbully-র ক্ষেত্রে normal থেকে ভুল করে আসা 263টা, ঠিক ধরা মাত্র 225টা। এটা সম্ভবত দুই dataset (BanHate, BD-SHS)-এর label দেওয়ার নিয়ম আলাদা হওয়ার ফল — শুধু imbalance নয়।
 
 ---
 
@@ -715,30 +717,33 @@ Improved model-এর বিস্তারিত (পুরনো run): normal-
 **Risk score (০–১০০):**
 
 ```
-risk = 100 × ( 0.5 × harmful ratio  +  0.3 × severity  +  0.2 × rise (০ থেকে ১-এর মধ্যে সীমিত) )
+harm load = harmful ratio × severity          (প্রতিটা activity-র গড় severity)
+risk = 100 × ( 0.5 × harmful ratio  +  0.3 × harm load  +  0.2 × rise (০ থেকে ১-এর মধ্যে সীমিত) )
 ```
 
-| Score | Level |
-|---|---|
-| < 20 | **Low** |
-| 20 – 45 | **Medium** |
-| ≥ 45 | **High** |
+| Score | Level | মানে (stable user, মাঝারি severity 0.5 ধরে) |
+|---|---|---|
+| < 13 | **Low** | 20%-এর কম activity ক্ষতিকর |
+| 13 – 32.5 | **Medium** | 20% থেকে 50% |
+| ≥ 32.5 | **High** | অর্ধেক বা তার বেশি activity ক্ষতিকর |
 
 **কেন এই ওজন?** কতটা ক্ষতিকর কাজ করে (ratio) সবচেয়ে গুরুত্বপূর্ণ (৫০%), কতটা গুরুতর (৩০%), আর বাড়ছে কিনা (২০%)। শুধু **বাড়া** গোনা হয় (কমা নয়) — কারণ কমতে থাকা আচরণ ঝুঁকি বাড়ায় না।
 
-উদাহরণ (user_B): 100 × (0.5×0.296 + 0.3×0.688 + 0.2×0.831) = 100 × (0.148 + 0.206 + 0.166) ≈ **52.1 → High**।
+**কেন severity-কে harmful ratio দিয়ে গুণ করা হয় (harm load)?** আগের সূত্রে ছিল `0.3 × severity` — ক্ষতিকর পোস্ট কতগুলো তা না দেখে। তখন ১০০টা পোস্টের মধ্যে মাত্র ১টা violence পোস্ট থাকলেও user 30 পয়েন্ট পেত (Medium)। শেষ FULL run-এ সাধারণ user_A এই কারণেই Medium হয়ে গিয়েছিল (21.4, সীমা ছিল 20)। Harm load-এ অল্প ক্ষতিকর পোস্ট = অল্প পয়েন্ট।
 
-**সেভ করা run-এর ফলাফল:**
+**কেন সীমা 20% আর 50%?** Classifier নিজেই test set-এ প্রায় ১৫% normal comment-কে ভুল করে ক্ষতিকর বলে (confusion matrix)। তাই কারো 20%-এর কম activity ক্ষতিকর দেখালে সেটা model-এর ভুল থেকে আলাদা করা যায় না → Low। কোডে সীমাগুলো সরাসরি এই অনুপাত থেকে হিসাব হয় (`RISK_MEDIUM = risk_score(0.20, 0.5, 0)`, `RISK_HIGH = risk_score(0.50, 0.5, 0)`), হাতে বসানো সংখ্যা নয়।
 
-| user | posts/week | harmful ratio | প্রধান ধরন | severity | trend | role | risk | level | প্রত্যাশা মিলেছে? |
-|---|---|---|---|---|---|---|---|---|---|
-| user_A | 4.83 | 0.121 | offensive | 0.429 | stable | author | 19.1 | **Low** | ✔ |
-| user_B | 4.50 | 0.296 | hate_speech | 0.688 | **escalating** | author | 52.1 | High | ✔ |
-| user_C | 5.75 | 0.478 | offensive | 0.402 | stable | **harasser** | 36.0 | Medium | ✔ |
+উদাহরণ (user_B, শেষ run): 100 × (0.5×0.278 + 0.3×0.278×0.633 + 0.2×0.765) = 100 × (0.139 + 0.053 + 0.153) ≈ **34.5 → High**।
 
-**তিনটা simulated user-ই যেটা দেখানোর জন্য বানানো হয়েছিল, profile ঠিক সেটাই খুঁজে পেয়েছে।**
+**শেষ FULL run-এর ফলাফল** (profile-এর সংখ্যাগুলো run থেকে; risk দুই সূত্রেই হিসাব করা):
 
-(লক্ষ্য করুন: user_A-কে 5% ক্ষতিকর ধরে বানানো হলেও 12.1% ধরা পড়েছে — কিছু false positive। তবুও Low-তেই আছে, অল্পের জন্য: 19.1।)
+| user | harmful ratio | প্রধান ধরন | severity | trend | role | পুরনো সূত্র | নতুন সূত্র | প্রত্যাশা |
+|---|---|---|---|---|---|---|---|---|
+| user_A | 0.138 | offensive | 0.469 | stable | author | 21.4 Medium ✘ | **9.3 Low** ✔ | Low |
+| user_B | 0.278 | hate_speech | 0.633 | **escalating** | author | 48.2 High | 34.5 High | escalating ✔ |
+| user_C | 0.507 | offensive | 0.400 | stable | **harasser** | 39.7 Medium | 33.7 High | harasser ✔ |
+
+(user_A-কে 5% ক্ষতিকর ধরে বানানো হলেও 13.8% ধরা পড়েছে — classifier-এর false positive। নতুন সূত্রে এখন সে সীমা থেকে অনেক দূরে: 9.3 বনাম 13। নতুন FULL run-এ model বদলাবে, তাই সংখ্যাগুলো একটু বদলাতে পারে।)
 
 ### ৮.৪ Time-series চার্ট
 
@@ -777,9 +782,9 @@ Evidence blocks  : 33 blocks
 
 ### ৯.১ Integrity check + tamper test
 
-- আসল ledger যাচাই: সেভ করা run-এ **102টা block, সব valid** (GENESIS 1, CLIENT_UPDATE 30, GLOBAL_MODEL 10, EVIDENCE 58, USER_PROFILE 3)।
-- **Tamper test:** chain-এর একটা **কপিতে** কেউ প্রমাণ লুকানোর চেষ্টা করে — block 41-এর prediction `offensive` → `normal` করে দেওয়া হয়।
-- ফলাফল: `Block 41 was changed (hash does not match its data)` — **সাথে সাথে ধরা পড়ে।**
+- আসল ledger যাচাই: শেষ FULL run-এ **120টা block, সব valid** (GENESIS 1, CLIENT_UPDATE 42, GLOBAL_MODEL 14, EVIDENCE 60, USER_PROFILE 3)।
+- **Tamper test:** chain-এর একটা **কপিতে** কেউ প্রমাণ লুকানোর চেষ্টা করে — block 57-এর prediction `offensive` → `normal` করে দেওয়া হয়।
+- ফলাফল: `Block 57 was changed (hash does not match its data)` — **সাথে সাথে ধরা পড়ে।**
 
 **কেন কপিতে?** আসল ledger নষ্ট না করে প্রমাণ দেখানো।
 
@@ -807,20 +812,20 @@ Evidence blocks  : 33 blocks
 | Requirement | Monitoring: status / share / comment | ✔ |
 | Requirement | Activity-গুলো time series হিসেবে | ✔ (12 সপ্তাহ) |
 | Requirement | ৫ aspect-এ profiling → profile vector | ✔ |
-| Requirement | Result: activity profile + risk level | ✔ (A: Low, B: High, C: Medium) |
+| Requirement | Result: activity profile + risk level | ✔ (A: Medium, B: High, C: Medium) |
 | Novel | `kutt*r bacc*` → `কুত্তার বাচ্চা` | ✔ |
 | Novel | `কুত্*ার বাচ্চা` → `কুত্তার বাচ্চা` | ✔ |
 | Novel | দুটোই ক্ষতিকর আর blockchain-এ সেভ | ✔ (offensive 0.98) |
 | Novel | Problem 1: imbalance কমেছে | ✔ (12.2x → 6.8x) |
-| Novel | Problem 2: macro F1 বেড়েছে | ✘ (0.629 → 0.628) |
-| Novel | Problem 2: সব ক্ষতিকর class-এর F1 বেড়েছে | ✘ (offensive কমেছে) |
+| Novel | Problem 2: macro F1 বেড়েছে | ✘ (0.631 → 0.630) |
+| Novel | Problem 2: সব ক্ষতিকর class-এর F1 বেড়েছে | ✘ (offensive, violence কমেছে) |
 | Shared | Federated learning (data share হয় না) | ✔ |
 | Shared | Blockchain valid + tampering ধরা পড়ে | ✔ |
-| Requirement | Simulated user_A → Low | ✔ |
+| Requirement | Simulated user_A → Low | ✘ (Medium, 21.4 — পুরনো risk সূত্র) |
 | Requirement | Simulated user_B → escalating | ✔ |
 | Requirement | Simulated user_C → harasser | ✔ |
 
-**Checklist ✘ দেখালেও লুকায় না** — এটা ইচ্ছাকৃত, যাতে থিসিসে সৎ ফলাফল যায়। দুটো ✘ পুরনো run-এর; নতুন কোড (threshold tuning সহ) FULL mode-এ চালিয়ে আবার দেখতে হবে।
+**Checklist ✘ দেখালেও লুকায় না** — এটা ইচ্ছাকৃত, যাতে থিসিসে সৎ ফলাফল যায়। এই তিনটা ✘ under-sampling আর পুরনো risk সূত্রের শেষ run-এর। কোড এখন বদলানো হয়েছে (over-sampling, harm load সূত্র) — FULL mode-এ আবার চালিয়ে দেখতে হবে। নতুন কোডে "Problem 1" check-টা `normal / সবচেয়ে ছোট class` অনুপাত তুলনা করে (over-sampling-এ normal-এর সংখ্যা কমে না)।
 
 ---
 
@@ -837,15 +842,18 @@ Evidence blocks  : 33 blocks
 | পুরো dataset-ও normalise | Training আর ব্যবহারের সময় লেখা একই রকম থাকতে হবে। |
 | Duplicate বাদ | Train আর test-এ একই comment থাকলে ফলাফল মিথ্যা ভালো দেখায়। |
 | Stratified split, test অছোঁয়া | সৎ মূল্যায়ন — বাস্তব distribution-এ পরীক্ষা। |
-| শুধু training-এ under-sampling | Model-কে normal-এর দিকে ঝুঁকতে না দেওয়া, কিন্তু test সৎ রাখা। |
-| `NORMAL_RATIO = 2.0` (1.5 না) | 1.5-এ normal user-কে ভুল করে Medium দেখাচ্ছিল। |
-| Class weight বন্ধ | Under-sampling-এর সাথে দিলে দ্বিগুণ সংশোধন → অনেক false "harmful"। |
+| শুধু training-এ over-sampling, প্রতিটা client-এর ভেতরে | ছোট class-কে বেশি দেখানো, কোনো data না হারিয়ে; data client ছেড়ে যায় না; test সৎ থাকে। |
+| Under-sampling বাদ | দুই FULL run-এ macro F1 বাড়েনি, আর ~11,000 normal উদাহরণ হারাত। |
+| `OVERSAMPLE_TO = 0.75` (1.0 না) | একই cyberbully comment খুব বেশিবার দেখালে model মুখস্থ করে ফেলে। |
+| Class weight বন্ধ | Re-sampling-এর সাথে দিলে দ্বিগুণ সংশোধন → অনেক false "harmful"। |
 | Threshold tuning validation-এ | Imbalance-এর বাকি প্রভাব ঠিক করা, test নিরপেক্ষ রেখে। |
 | Macro F1 দিয়ে সেরা round বাছাই | Problem 2 প্রতিটা class নিয়ে; accuracy imbalance-এ বিভ্রান্তিকর। |
 | FULL-এ ৭ round | ৫ round-এও F1 বাড়ছিল। |
 | Federated learning | প্রতিষ্ঠানগুলো গোপন data share না করেই একসাথে model বানাতে পারে। |
 | Client-দের একই class mix | প্রতিটা client-এর data যেন একই রকম হয়, training স্থিতিশীল থাকে। |
 | Gradient clipping, mixed precision | Training স্থিতিশীল ও দ্রুত। |
+| Risk-এ severity × harmful ratio (harm load) | অল্প কয়েকটা গুরুতর পোস্টে সাধারণ user Medium হয়ে যেত না। |
+| Risk সীমা 20% / 50% ক্ষতিকর activity থেকে | Classifier নিজেই ~১৫% normal-কে ক্ষতিকর বলে; তার নিচে Low। |
 | `EVIDENCE_MIN_CONFIDENCE = 0.60` | কম নিশ্চিত অভিযোগ evidence না করে মানুষের review-তে পাঠানো। |
 | মূল লেখার SHA-256 evidence-এ | মূল লেখা পরে বদলানো হয়নি তা প্রমাণ। |
 | Model fingerprint blockchain-এ | কোন model দিয়ে সিদ্ধান্ত, আর সেটা বদলানো হয়নি — প্রমাণ। |
@@ -859,30 +867,33 @@ Evidence blocks  : 33 blocks
 
 **যা ভালো কাজ করছে:**
 - Novelty chain (unmask → transliterate → classify → blockchain) হাতের নোটের দুটো উদাহরণেই ঠিক কাজ করছে।
-- Imbalance 12.2x থেকে 6.8x-এ নেমেছে।
-- তিনটা simulated user-এর প্রত্যাশিত আচরণ (Low, escalating, harasser) সঠিকভাবে ধরা পড়েছে।
+- Imbalance কমেছে (under-sampling-এ 12.2x → 6.8x; over-sampling-এ হিসাব অনুযায়ী ≈ 4.8x)।
+- user_B-এর escalating trend আর user_C-এর harasser role দুই run-এই ধরা পড়েছে।
 - Blockchain পরিবর্তন সাথে সাথে ধরে ফেলে।
 
 **যা মনে রাখতে হবে:**
-1. **নোটবুকের সেভ করা output পুরনো run-এর।** বর্তমান কোড FULL mode-এ আবার চালিয়ে নতুন সংখ্যা নিতে হবে।
-2. **পুরনো run-এ macro F1 বাড়েনি** (0.6286 → 0.6277)। ছোট class-গুলো বেড়েছে, কিন্তু normal/offensive কমেছে। Threshold tuning এটা ঠিক করার জন্যই যোগ করা হয়েছে — নতুন run-এ যাচাই করতে হবে।
-3. **Cyberbully-র F1 কম (~0.35)।** এটা সবচেয়ে ছোট class, আর অন্য ক্ষতিকর class-এর সাথে গুলিয়ে যায়।
+1. **নোটবুকের সেভ করা output under-sampling-এর শেষ run-এর।** বর্তমান কোড (over-sampling, নতুন risk সূত্র) FULL mode-এ আবার চালিয়ে নতুন সংখ্যা নিতে হবে (~২–২.৫ ঘণ্টা)।
+2. **এখন পর্যন্ত কোনো imbalance পদ্ধতিতে macro F1 বাড়েনি।** Under-sampling + class weight: 0.6286 → 0.6277; under-sampling + threshold: 0.6308 → 0.6302 — দুটোই noise-এর মধ্যে। Over-sampling এখনো পরীক্ষা হয়নি; এটাও কাজ না করলে থিসিসে সৎভাবে লিখতে হবে যে এই dataset-এ সীমাবদ্ধতা imbalance নয়, label-এর মিল না থাকা।
+3. **Cyberbully-র F1 কম (~0.35)।** শুধু ছোট class বলে না — normal থেকে ভুল করে আসা (263) ঠিক ধরার (225) চেয়ে বেশি, আর hate_speech-এর সাথে গুলিয়ে যায়। দুই dataset-এর label-এর নিয়ম আলাদা হওয়া সম্ভাব্য কারণ।
 4. **ToxLex লোড হয়নি** — `data/ToxLex.xlsx` repo-তে যোগ করতে হবে।
 5. **User-রা simulated।** আসল public data (আইনসম্মত) দিয়ে পরীক্ষা করলে থিসিস আরও শক্তিশালী হবে।
 6. **Federated learning একটা GPU-তেই simulate করা**, আর client-দের data সমান ভাগ করা (IID)। বাস্তবে প্রতিষ্ঠানগুলোর data আলাদা ধরনের হতে পারে (non-IID), তখন ফল খারাপ হতে পারে।
 7. **Blockchain একটা local ফাইল, একটাই node।** যার হাতে ফাইল আছে সে চাইলে পুরো chain নতুন করে বানাতে পারে (difficulty মাত্র "00")। বাস্তবে একাধিক পক্ষের কাছে কপি রাখা বা শেষ hash-টা কোথাও নিরাপদে প্রকাশ করা দরকার।
 8. **Training data-য় লুকানো/Romanized comment খুব কম** (123 আর 2)। Novel অংশের আসল উপকার নতুন বাস্তব input-এ।
 9. **Unmasker VOCAB-নির্ভর** — একদম নতুন শব্দ (vocab-এ নেই) unmask হবে না।
-10. **Risk score-এর ওজন আর সীমা (20, 45) হাতে ঠিক করা** — analyst বদলাতে পারেন, কিন্তু বৈজ্ঞানিকভাবে calibrate করা নয়।
+10. **Risk score-এর ওজন (0.5 / 0.3 / 0.2) হাতে ঠিক করা।** সীমাগুলো (13, 32.5) 20% আর 50% ক্ষতিকর activity থেকে হিসাব করা, আর 20%-এর কারণ classifier-এর মাপা false positive হার — তবুও আসল labelled user data দিয়ে calibrate করা নয়।
 
 ---
 
 ## ১৭. Supervisor-এর সম্ভাব্য প্রশ্ন ও উত্তর
 
-**প্রশ্ন: Accuracy কমল কেন, তবুও improved বলছ কেন?**
-উত্তর: Baseline প্রায় সবকিছুকে "normal" বলে accuracy বাড়ায়, কারণ ৫৯% data normal। আমাদের লক্ষ্য প্রতিটা class — তাই macro F1 আর per-class F1 দেখি। ছোট ক্ষতিকর class-গুলোর F1 বেড়েছে।
+**প্রশ্ন: Accuracy কমলে তবুও improved বলবে কেন?**
+উত্তর: ৫৯% data normal, তাই accuracy মূলত normal-এর ফল দেখায়। আমাদের লক্ষ্য প্রতিটা class — তাই macro F1 আর per-class F1 দেখি। তবে সতর্কতা: এই data-য় baseline সবকিছুকে "normal" বলে **না** (normal recall 0.85) — তাই macro F1 না বাড়লে শুধু accuracy কমা দিয়ে improved দাবি করা যাবে না।
 
-**প্রশ্ন: Test set-এ under-sampling করোনি কেন?**
+**প্রশ্ন: Imbalance ঠিক করেও macro F1 বাড়েনি কেন?**
+উত্তর: Confusion matrix দেখায়, বড় ভুলগুলো class-এর সংখ্যার কারণে নয় — normal comment-কে ক্ষতিকর বলা আর cyberbully/hate_speech গুলিয়ে ফেলা। দুই dataset (BanHate, BD-SHS) আলাদা নিয়মে label দিয়েছে, তাই একই ধরনের comment দুই জায়গায় আলাদা label পেতে পারে। Pretrained BanglaBERT আর macro F1 দিয়ে সেরা round বাছাই — এই দুটোই মাঝারি imbalance (12x) নিজেই অনেকটা সামলে নেয়।
+
+**প্রশ্ন: Test set-এ over-sampling করোনি কেন?**
 উত্তর: Test set বাস্তবের প্রতিনিধি। সেটা বদলালে score মিথ্যা ভালো দেখাত।
 
 **প্রশ্ন: Threshold tuning কি cheating না?**
@@ -912,7 +923,8 @@ Evidence blocks  : 33 blocks
 | **DF (Digital Forensics)** | ডিজিটাল প্রমাণ সংগ্রহ, বিশ্লেষণ আর সংরক্ষণ — যাতে আদালতে ব্যবহার করা যায়। |
 | **Class / Label** | যে ভাগে একটা comment পড়ে (normal, offensive …)। |
 | **Class imbalance** | কোনো class-এ অনেক বেশি উদাহরণ, অন্যগুলোতে কম। |
-| **Under-sampling** | বড় class থেকে কিছু উদাহরণ বাদ দেওয়া। |
+| **Over-sampling** | ছোট class-এর উদাহরণ copy করে বারবার রাখা, যাতে model সেগুলো বেশি দেখে। কিছু বাদ যায় না। |
+| **Under-sampling** | বড় class থেকে কিছু উদাহরণ বাদ দেওয়া (আগের version-এ ব্যবহার হতো)। |
 | **Stratified split** | ভাগ করার সময় প্রতিটা ভাগে class-এর অনুপাত একই রাখা। |
 | **Train / Validation / Test** | শেখা / সিদ্ধান্ত নেওয়া (tuning) / শেষ পরীক্ষা। |
 | **Precision** | Model যেগুলোকে "X" বলেছে তার কতগুলো আসলেই X। |
