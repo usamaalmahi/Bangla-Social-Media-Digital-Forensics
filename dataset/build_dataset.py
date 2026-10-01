@@ -49,7 +49,16 @@ RAW_URLS = {
     "vitd/train.csv": "https://huggingface.co/datasets/kcrl/Violence/resolve/main/train.csv",
     "vitd/dev.csv": "https://huggingface.co/datasets/kcrl/Violence/resolve/main/dev.csv",
     "vitd/test.csv": "https://huggingface.co/datasets/kcrl/Violence/resolve/main/test.csv",
+    # Extra sources for the small 'offensive' class (training only, see TRAIN_ONLY_SOURCES)
+    "tbolid/train.json": "https://raw.githubusercontent.com/LanguageTechnologyLab/TB-OLID/main/train.json",
+    "tbolid/test.json": "https://raw.githubusercontent.com/LanguageTechnologyLab/TB-OLID/main/test.json",
+    "vulgar/Drama_vulgar_samples.txt": "https://raw.githubusercontent.com/sazzadcsedu/Bangla-vulgar-corpus/main/"
+        "Drama_vulgar_samples.txt",
 }
+
+# Sources added after v1 go to TRAIN only: the validation/test split of the original five sources stays
+# exactly as it was, so the checked test labels (step 9) remain valid.
+TRAIN_ONLY_SOURCES = {"tbolid", "vulgar"}
 
 
 # ---------------------------------------------------------------- 1. download
@@ -173,6 +182,48 @@ def load_vitd(raw):
     return pd.concat(parts, ignore_index=True)
 
 
+# TB-OLID (Raihan et al., BLP-2023): Romanized Bangla Facebook comments, OLID taxonomy.
+# Offensive + group target is split by the group: an identity group (religion, nation, ethnicity, party,
+# women, LGBT) -> hate_speech; any other group (a team, the police, fans) -> offensive.
+IDENTITY_GROUP = re.compile(
+    r"muslim|musolman|islam|hindu|hindo|malaun|malu|kafir|nastik|athiest|christ|gristan|khristan|buddh|vuddo|"
+    r"india|indian|randia|varot|bharot|bharat|hindustan|pakistan|paki|bihari|rohing|chakma|jati|dhorm|"
+    r"awami|league|lig\b|bnp|jamat|shibir|"
+    r"shahbag|razakar|rajakar|nari|meyera|meye ra|mohila|hijra|gay|lesbian", re.I)
+
+def load_tbolid(raw):
+    parts = []
+    for split in ("train", "test"):
+        df = pd.read_json(os.path.join(raw, "tbolid", f"{split}.json"))
+        labels, rules = [], []
+        for text, off, target in zip(df["text"], df["offensive_gold"], df["target_gold"]):
+            if off != "O":
+                label, rule = "normal", "N -> normal"
+            elif target == "I":
+                label, rule = "cyberbully", "O|I -> cyberbully"
+            elif target == "G":
+                identity = bool(IDENTITY_GROUP.search(str(text)))
+                label = "hate_speech" if identity else "offensive"
+                rule = f"O|G|{'identity' if identity else 'other group'} -> {label}"
+            else:
+                label, rule = "offensive", "O|U -> offensive"
+            labels.append(label); rules.append(rule)
+        parts.append(pd.DataFrame({
+            "id": [f"tbolid_{split}_{i}" for i in range(len(df))], "text": df["text"], "source": "tbolid",
+            "source_split": split, "source_label": df["offensive_gold"] + "|" + df["target_gold"].fillna("-"),
+            "label": labels, "mapping_rule": rules}))
+    return pd.concat(parts, ignore_index=True)
+
+def load_vulgar(raw):
+    """Bangla vulgar corpus (Sazzed, PeerJ CS 2021): vulgar YouTube drama reviews -> offensive
+    (swearing at the drama, not at one person). The non-vulgar and subject-person files are not used."""
+    path = os.path.join(raw, "vulgar", "Drama_vulgar_samples.txt")
+    lines = [l.strip() for l in open(path, encoding="utf-8") if l.strip()]
+    return pd.DataFrame({"id": [f"vulgar_drama_{i}" for i in range(len(lines))], "text": lines,
+                         "source": "vulgar", "source_split": "all", "source_label": "drama vulgar",
+                         "label": "offensive", "mapping_rule": "drama vulgar -> offensive"})
+
+
 # ---------------------------------------------------------------- 3. clean
 def clean(text):
     if not isinstance(text, str):
@@ -190,7 +241,7 @@ def dedup_key(text):
 
 
 # ---------------------------------------------------------------- 4. duplicates
-KEEP_ORDER = {"belal": 0, "bdshs": 1, "banhate": 2, "boc": 3, "vitd": 4}
+KEEP_ORDER = {"belal": 0, "bdshs": 1, "banhate": 2, "boc": 3, "vitd": 4, "tbolid": 5, "vulgar": 6}
 
 def resolve_duplicates(df):
     df = df.copy()
@@ -199,6 +250,13 @@ def resolve_duplicates(df):
     for key, g in groups:
         if len(g) == 1:
             continue
+        # A train-only source never changes a row of the original five sources: its copy is dropped.
+        added = g["source"].isin(TRAIN_ONLY_SOURCES)
+        if added.any() and not added.all():
+            df.loc[g.index[added], ["status", "reason"]] = ["dropped", "duplicate of a row in an original source"]
+            g = g[~added]
+            if len(g) == 1:
+                continue
         # Belal et al. re-labelled Bangla Online Comments by hand: prefer their label.
         if (g["source"] == "belal").any() and (g["source"] == "boc").any():
             drop = g.index[g["source"] == "boc"]
@@ -217,7 +275,8 @@ def resolve_duplicates(df):
 # ---------------------------------------------------------------- 5. split
 def split(df):
     from sklearn.model_selection import train_test_split
-    kept = df[df["status"] == "kept"]
+    train_only = (df["status"] == "kept") & df["source"].isin(TRAIN_ONLY_SOURCES)
+    kept = df[(df["status"] == "kept") & ~train_only]
     strata = kept["source"] + "|" + kept["label"]
     rare = strata.map(strata.value_counts()) < 10                 # tiny strata always go to train
     pool = kept[~rare]
@@ -227,6 +286,7 @@ def split(df):
     df.loc[kept.index, "split"] = "train"
     df.loc[val, "split"] = "val"
     df.loc[test, "split"] = "test"
+    df.loc[train_only, "split"] = "train"
     return df
 
 
@@ -413,7 +473,8 @@ def main():
 
     ensure_sources(args.raw)
     df = pd.concat([load_banhate(args.raw), load_bdshs(args.raw), load_belal(args.raw),
-                    load_boc(args.raw), load_vitd(args.raw)], ignore_index=True)
+                    load_boc(args.raw), load_vitd(args.raw), load_tbolid(args.raw), load_vulgar(args.raw)],
+                   ignore_index=True)
     print("loaded", len(df), "rows:", df["source"].value_counts().to_dict())
 
     df["text"] = df["text"].map(clean)

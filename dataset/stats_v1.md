@@ -8,27 +8,30 @@
 | bdshs | 0 | 13826 | 1363 | 26125 | 1735 | 7232 | 50281 |
 | belal | 0 | 3373 | 3062 | 7585 | 634 | 1419 | 16073 |
 | boc | 0 | 19390 | 7577 | 15340 | 0 | 1694 | 44001 |
+| tbolid | 0 | 1192 | 325 | 2619 | 864 | 0 | 5000 |
 | vitd | 2058 | 0 | 0 | 3202 | 0 | 786 | 6046 |
-| total | 2058 | 39859 | 15744 | 62300 | 3086 | 12557 | 135604 |
+| vulgar | 0 | 0 | 0 | 0 | 664 | 0 | 664 |
+| total | 2058 | 41051 | 16069 | 64919 | 4614 | 12557 | 141268 |
 
 ## Dropped rows
 
-| reason | banhate | bdshs | belal | boc | vitd | total |
-|---|---|---|---|---|---|---|
-| duplicate | 138 | 198 | 174 | 2051 | 54 | 2615 |
-| duplicate with conflicting labels | 133 | 112 | 27 | 198 | 3 | 473 |
-| empty or too short | 1 | 91 | 28 | 171 | 2 | 293 |
-| label cannot be mapped (VITD passive violence) | 0 | 0 | 0 | 0 | 2058 | 2058 |
-| overlap: relabelled copy in belal kept | 0 | 0 | 0 | 1118 | 0 | 1118 |
+| reason | banhate | bdshs | belal | boc | tbolid | vitd | vulgar | total |
+|---|---|---|---|---|---|---|---|---|
+| duplicate | 138 | 198 | 174 | 2051 | 4 | 54 | 8 | 2627 |
+| duplicate of a row in an original source | 0 | 0 | 0 | 0 | 0 | 0 | 64 | 64 |
+| duplicate with conflicting labels | 133 | 112 | 27 | 198 | 0 | 3 | 0 | 473 |
+| empty or too short | 1 | 91 | 28 | 171 | 0 | 2 | 0 | 293 |
+| label cannot be mapped (VITD passive violence) | 0 | 0 | 0 | 0 | 0 | 2058 | 0 | 2058 |
+| overlap: relabelled copy in belal kept | 0 | 0 | 0 | 1118 | 0 | 0 | 0 | 1118 |
 
 ## Kept rows per split and label
 
 | split | normal | offensive | cyberbully | hate_speech | violence | total |
 |---|---|---|---|---|---|---|
 | test | 1864 | 94 | 1206 | 477 | 359 | 4000 |
-| train | 57327 | 2901 | 37078 | 14665 | 11076 | 123047 |
+| train | 59946 | 4353 | 38270 | 14990 | 11076 | 128635 |
 | val | 932 | 48 | 603 | 238 | 179 | 2000 |
-| total | 60123 | 3043 | 38887 | 15380 | 11614 | 129047 |
+| total | 62742 | 4495 | 40079 | 15705 | 11614 | 134635 |
 
 ## Kept rows per source and label
 
@@ -38,48 +41,52 @@
 | bdshs | 25878 | 1730 | 13724 | 1351 | 7197 | 49880 |
 | belal | 7425 | 621 | 3345 | 3052 | 1401 | 15844 |
 | boc | 13825 | 0 | 18568 | 7258 | 812 | 40463 |
+| tbolid | 2619 | 860 | 1192 | 325 | 0 | 4996 |
 | vitd | 3144 | 0 | 0 | 0 | 785 | 3929 |
-| total | 60123 | 3043 | 38887 | 15380 | 11614 | 129047 |
+| vulgar | 0 | 592 | 0 | 0 | 0 | 592 |
+| total | 62742 | 4495 | 40079 | 15705 | 11614 | 134635 |
 
 ## Label cleaning (train only)
 
-Confident-learning thresholds: {'normal': np.float64(0.794), 'offensive': np.float64(0.171), 'cyberbully': np.float64(0.643), 'hate_speech': np.float64(0.573), 'violence': np.float64(0.518)}
+Confident-learning thresholds: {'normal': 0.789, 'offensive': 0.244, 'cyberbully': 0.634, 'hate_speech': 0.567, 'violence': 0.518}
 
 | label | train rows | flagged as probable error | removed (max 15%) |
 |---|---|---|---|
-| normal | 57327 | 2957 | 2957 |
-| offensive | 2901 | 987 | 435 |
-| cyberbully | 37078 | 4194 | 4194 |
-| hate_speech | 14665 | 2140 | 2140 |
-| violence | 11076 | 2108 | 1661 |
+| normal | 59946 | 3383 | 3383 |
+| offensive | 4353 | 1351 | 652 |
+| cyberbully | 38270 | 4451 | 4451 |
+| hate_speech | 14990 | 2253 | 2248 |
+| violence | 11076 | 2081 | 1661 |
 
 Most common suggested corrections (given -> suggested):
 
 | label | issue_suggested_label | rows |
 |---|---|---|
-| cyberbully | normal | 1777 |
-| normal | cyberbully | 1720 |
-| violence | cyberbully | 1182 |
-| cyberbully | violence | 1032 |
-| hate_speech | cyberbully | 918 |
-| cyberbully | offensive | 882 |
-| offensive | cyberbully | 708 |
-| hate_speech | normal | 689 |
-| normal | hate_speech | 517 |
-| cyberbully | hate_speech | 503 |
-| normal | violence | 452 |
-| violence | hate_speech | 360 |
+| cyberbully | normal | 1864 |
+| normal | cyberbully | 1817 |
+| violence | cyberbully | 1214 |
+| cyberbully | violence | 1039 |
+| cyberbully | offensive | 1000 |
+| hate_speech | cyberbully | 975 |
+| offensive | cyberbully | 954 |
+| hate_speech | normal | 730 |
+| normal | hate_speech | 557 |
+| cyberbully | hate_speech | 548 |
+| normal | offensive | 541 |
+| normal | violence | 468 |
 
 ## Balanced training core (version C)
 
 | source | normal | offensive | cyberbully | hate_speech | violence | total |
 |---|---|---|---|---|---|---|
-| banhate | 1200 | 506 | 1500 | 1678 | 1106 | 5990 |
-| bdshs | 1200 | 1500 | 1500 | 966 | 2567 | 7733 |
-| belal | 1200 | 460 | 1500 | 1678 | 1096 | 5934 |
-| boc | 1200 | 0 | 1500 | 1678 | 611 | 4989 |
-| vitd | 1200 | 0 | 0 | 0 | 620 | 1820 |
-| total | 6000 | 2466 | 6000 | 6000 | 6000 | 26466 |
+| banhate | 1000 | 470 | 1287 | 1607 | 1124 | 5488 |
+| bdshs | 1000 | 1439 | 1287 | 970 | 2574 | 7270 |
+| belal | 1000 | 445 | 1287 | 1607 | 1080 | 5419 |
+| boc | 1000 | 0 | 1287 | 1607 | 604 | 4498 |
+| tbolid | 1000 | 817 | 852 | 209 | 0 | 2878 |
+| vitd | 1000 | 0 | 0 | 0 | 618 | 1618 |
+| vulgar | 0 | 530 | 0 | 0 | 0 | 530 |
+| total | 6000 | 3701 | 6000 | 6000 | 6000 | 27701 |
 
 ## Step 9: checked test labels
 

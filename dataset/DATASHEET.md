@@ -12,8 +12,8 @@ Everything is produced by `dataset/build_dataset.py`; the numbers below come fro
 | `dataset/guideline_v1.md` | yes | the label definitions and the source-label mapping |
 | `dataset/test_label_check.csv` | yes | the checked test labels (IDs + labels only, no comment text) |
 | `dataset/stats_v1.md` | yes | all counts and agreement tables |
-| `data/bangla_forensics_dataset_v1.csv.gz` | **yes** | the dataset, compressed (about 8 MB) — read by the notebook |
-| `data/bangla_forensics_dataset_v1.csv` | no | the same, uncompressed (UTF-8 with BOM, 135,604 rows incl. dropped ones) |
+| `data/bangla_forensics_dataset_v1.csv.gz` | **yes** | the dataset, compressed (about 8 MB, 141,268 rows incl. dropped ones) — read by the notebook |
+| `data/bangla_forensics_dataset_v1.csv` | no | the same, uncompressed (UTF-8 with BOM) |
 | `data/bangla_forensics_dataset_v1.xlsx` | no | the same, for viewing: sheets data, dropped, split x label, source x label, label mapping, checked test labels |
 
 **The repository must stay private**: two sources (Belal et al., VITD) have no licence that allows publishing
@@ -21,7 +21,7 @@ them. The compressed dataset is committed; everything else in `data/` stays loca
 `python dataset/build_dataset.py` (which also rewrites the `.csv.gz`).
 
 **For Colab:** notebook cell 1.1 downloads the `.csv.gz` from the private repository with a read-only GitHub
-token stored in Colab Secrets as `GITHUB_TOKEN` (setup steps in the notes above cell 1.1). Without a token,
+token stored in Colab Secrets as `GITHUB_TOKEN` (setup steps in `README.md`). Without a token,
 upload the `.csv.gz` to Colab by hand.
 
 ## Sources and licences
@@ -33,6 +33,12 @@ upload the `.csv.gz` to Colab by hand.
 | Bangla Online Comments | Facebook | 44,001 | CC BY 4.0 | Ahmed et al., Mendeley 9xjx8twk8p |
 | Belal et al. toxic comments | social media | 16,073 | none stated — research use with citation | Belal et al., ECCE 2023 |
 | BLP-2023 VITD | YouTube | 6,046 | none stated — research use with citation | huggingface.co/datasets/kcrl/Violence |
+| TB-OLID *(training only)* | Facebook, Romanized Bangla | 5,000 | AGPL-3.0 repo; paper CC BY-NC-ND 4.0 — non-commercial research | Raihan et al., BLP-2023; github.com/LanguageTechnologyLab/TB-OLID |
+| Bangla vulgar corpus, drama reviews *(training only)* | YouTube | 664 | none stated in repo (paper CC BY) — research use with citation | Sazzed, PeerJ CS 2021; github.com/sazzadcsedu/Bangla-vulgar-corpus |
+
+The last two sources were added to give `offensive` more real examples. They go to **training only**, and a
+comment that already exists in one of the five original sources is dropped from them, so the validation and test
+split is identical to the first build.
 
 Note: Belal et al. re-labelled part of Bangla Online Comments by hand. Where the same comment appears in both,
 the Belal copy is kept (1,118 BOC rows dropped).
@@ -57,16 +63,18 @@ the Belal copy is kept (1,118 BOC rows dropped).
 5. **Split** (seed 42, stratified by source × label, natural class mix): test 4,000, validation 2,000,
    train 123,047. Validation and test are never filtered or balanced.
 6. **Label cleaning (train only):** 5-fold cross-validated TF-IDF (char 2–5-grams) + logistic regression, then
-   confident learning (Northcutt et al., 2021). 12,386 probable errors flagged; 11,387 removed, never more than
+   confident learning (Northcutt et al., 2021). 13,519 probable errors flagged; 12,395 removed, never more than
    15% of a class.
 7. **Balanced core (version C):** up to 6,000 per class, shared as evenly as possible between sources
-   (water-filling). `offensive` has only 2,466 usable rows, so the core has 26,466 rows.
+   (water-filling). `offensive` has 3,701 usable real rows (2,466 before TB-OLID and the vulgar corpus were
+   added), so the core has 27,701 rows. The notebook (cell 4.2, `OVERSAMPLE_TO = 1.0`) repeats `offensive`
+   comments inside every client, so version C **trains on exactly 6,000 comments per class**.
 
 ## Class counts (kept rows)
 
 | split | normal | offensive | cyberbully | hate_speech | violence | total |
 |---|---|---|---|---|---|---|
-| train | 57,327 | 2,901 | 37,078 | 14,665 | 11,076 | 123,047 |
+| train | 59,946 | 4,353 | 38,270 | 14,990 | 11,076 | 128,635 |
 | val | 932 | 48 | 603 | 238 | 179 | 2,000 |
 | test | 1,864 | 94 | 1,206 | 477 | 359 | 4,000 |
 

@@ -8,6 +8,7 @@
 
 ## সূচিপত্র
 
+0. [Handover-এর আগে যা করতে হবে (নিজের জন্য নির্দেশনা)](#০-handover-এর-আগে-যা-করতে-হবে-নিজের-জন্য-নির্দেশনা)
 1. [এক নজরে পুরো কাজ](#১-এক-নজরে-পুরো-কাজ)
 2. [Requirement: কী চাওয়া হয়েছিল](#২-requirement-কী-চাওয়া-হয়েছিল)
 3. [পুরো সিস্টেমের ছবি (pipeline)](#৩-পুরো-সিস্টেমের-ছবি-pipeline)
@@ -26,6 +27,78 @@
 16. [ফলাফল নিয়ে সৎ মূল্যায়ন ও সীমাবদ্ধতা](#১৬-ফলাফল-নিয়ে-সৎ-মূল্যায়ন-ও-সীমাবদ্ধতা)
 17. [Supervisor-এর সম্ভাব্য প্রশ্ন ও উত্তর](#১৭-supervisor-এর-সম্ভাব্য-প্রশ্ন-ও-উত্তর)
 18. [শব্দকোষ (সহজ ভাষায়)](#১৮-শব্দকোষ-সহজ-ভাষায়)
+
+---
+
+## ০. Handover-এর আগে যা করতে হবে (নিজের জন্য নির্দেশনা)
+
+নোটবুকটা professor-কে দেওয়ার মতো করে গোছানো হয়েছে: demo guide, "মিটিংয়ে কী দেখাতে হবে", token setup-এর ধাপ, "thesis-এর সংখ্যা এখান থেকে নাও" — এ ধরনের নিজের জন্য লেখা নির্দেশনা নোটবুক থেকে সরিয়ে এখানে (আর setup-এর অংশটা `README.md`-তে) আনা হয়েছে। নোটবুকে এখন শুধু পদ্ধতির ব্যাখ্যা, কোড আর একটা **Limitations** অংশ আছে।
+
+### ০.১ সবচেয়ে জরুরি: নোটবুক FULL mode-এ আবার চালানো
+
+> ⚠️ **নোটবুকের সব output মুছে (clear) দেওয়া হয়েছে।** কারণ: সেভ করা output-গুলো ছিল **পুরনো pipeline-এর** — পুরনো dataset (শুধু BanHate + BD-SHS, 59,410 comment), পুরনো 80/20 split (test 11,882), আর under-sampling। কিন্তু কোড এখন নতুন dataset (৭টা উৎস, fixed 4,000 test), version C আর over-sampling ব্যবহার করে। ফলে টেবিলে `undersampled_F1` দেখাচ্ছিল অথচ কোডে `oversampled_F1` — professor দেখলে প্রথমেই এটা ধরবেন। পুরনো output-গুলো হারায়নি: git history-তে আছে (commit `2c4cf94`-এর নোটবুক)।
+
+করণীয়:
+1. Colab-এ নোটবুক খোলা → `Runtime → Change runtime type → T4 GPU`।
+2. Cell 0.2-এ `RUN_MODE = "FULL"`, `SEED = 42`; cell 1.1-এ `DATA_VERSION = "C"`।
+3. `Runtime → Run all` (প্রায় ২ ঘণ্টা)।
+4. শেষ হলে `File → Save a copy in GitHub` (বা নোটবুক download করে repo-তে রাখা) — যাতে **নতুন output সহ** নোটবুক repo-তে যায়।
+5. Cell 9.3-এর checklist দেখা: কোন কোন ✘ আছে। ✘ থাকলে লুকানোর দরকার নেই (নিচে ০.৫ দেখো), কিন্তু professor-কে দেওয়ার আগে নিজে জানা থাকা দরকার।
+6. (ঐচ্ছিক, কিন্তু ভালো) নতুন সংখ্যাগুলো দিয়ে `README.md`-তে একটা ছোট **Results** অংশ যোগ করা: per-class F1 টেবিল (baseline বনাম improved) আর ৩ user-এর risk level। এখন README-তে কোনো ফলাফলের সংখ্যা নেই, কারণ পুরনো সংখ্যাগুলো বর্তমান কোডের সাথে মেলে না।
+
+### ০.২ Dataset version তুলনা (cell 6.6) — ৯টা run
+
+Cell 6.6 dataset version A, B, C তুলনা করে, প্রতিটা ৩টা seed (42, 43, 44) দিয়ে — মোট ৯টা run। প্রতিটা run নিজের ফলাফল `runs/` ফোল্ডারে (Google Drive-এ) রাখে, আর 6.6 সব মিলিয়ে mean ± std দেখায়।
+- সময় বাঁচাতে এই extra run-গুলোতে cell 6.1-এ `RUN_BASELINE = False` দেওয়া যায় (baseline শুধু একবার, মূল run-এ লাগে)।
+- **কেন ৩টা seed?** একই setup দুবার চালালেই macro F1 ~0.002–0.005 বদলায় (GPU-র randomness)। একটা run দিয়ে "A-র চেয়ে C ভালো" বলা যায় না; পার্থক্য যদি seed-গুলোর মধ্যের ছড়ানোর (std) চেয়ে স্পষ্টভাবে বড় হয়, তবেই সেটা আসল।
+- `SAVE_TO_DRIVE = True` রাখতে হবে, নইলে Colab session বন্ধ হলে `runs/` হারিয়ে যাবে।
+- **Sidenote — seed:** random সংখ্যা তৈরির শুরুর বিন্দু। একই seed = একই shuffle, একই client ভাগ, তাই ফলাফল পুনরায় পাওয়া যায় (reproducible)।
+
+### ০.৩ GitHub token আর ToxLex
+
+**GITHUB_TOKEN (dataset পড়ার জন্য, একবারই করতে হয়):**
+1. GitHub → Settings → Developer settings → **Fine-grained tokens** → *Generate new token*: repository access = শুধু এই repo, permission **Contents: Read-only**।
+2. Colab-এ বাঁ পাশের **চাবি (key) আইকন** → *Add new secret* → নাম `GITHUB_TOKEN`, token paste, *Notebook access* চালু।
+- Token নোটবুকে কখনো লেখা হয় না, তাই নোটবুক GitHub-এ গেলেও token ফাঁস হয় না।
+- Token ছাড়াও চলে: `bangla_forensics_dataset_v1.csv.gz` হাতে Colab-এর Files panel-এ upload করলে।
+
+**ToxLex এখনো লোড হয় না** (Mendeley Colab-কে 403 দেয়)। কোড এখন বদলানো হয়েছে: Mendeley ব্যর্থ হলে একই GITHUB_TOKEN দিয়ে private repo-র `data/ToxLex.xlsx` থেকে নেয়। (আগের কোড `raw.githubusercontent.com` থেকে token ছাড়া নিত — private repo-তে সেটা কখনোই কাজ করত না।) করণীয়:
+1. ব্রাউজারে Mendeley dataset `9pz8ssmc49` থেকে ToxLex Excel ফাইলটা নামানো।
+2. `data/ToxLex.xlsx` নামে রাখা (`.gitignore`-এ এর জন্য ছাড় যোগ করা হয়েছে) আর commit + push করা।
+3. তাহলে unmasker 1,182টা Nirmol entry-র সাথে আরও ~1,959টা ToxLex bigram পাবে — বিশেষ করে বাক্যাংশ-ভিত্তিক unmask ভালো হবে।
+
+### ০.৪ Professor-এর access
+
+- Repo **private** (দুটো উৎসের license প্রকাশ করার অনুমতি দেয় না)। Professor-কে GitHub-এ **collaborator** হিসেবে যোগ করতে হবে, নইলে README, নোটবুক বা Colab badge কিছুই খুলবে না।
+- Professor নিজে চালাতে চাইলে তাঁর নিজের token লাগবে (README-র Section 5-এ ধাপগুলো আছে), অথবা `.csv.gz` ফাইলটা আলাদাভাবে দেওয়া যায়।
+- `SAVE_TO_DRIVE = True` থাকলে চালানোর সময় Google Drive-এর অনুমতি চাইবে — professor-কে জানিয়ে রাখা ভালো, অথবা তাঁর জন্য `False` (তখন output Colab-এর `outputs/` ফোল্ডারে যায়)।
+- নোটবুকের শিরোনামে নিজের নাম / supervisor-এর নাম / বিভাগ যোগ করতে চাইলে cell 1-এর একদম উপরে যোগ করা যায় (এখন নাম নেই)।
+- এই সব পরিবর্তন এখনো **commit করা হয়নি** — দেখে নিয়ে commit আর push করতে হবে।
+
+### ০.৫ Supervisor মিটিংয়ে দেখানোর ক্রম (নোটবুক থেকে সরানো demo guide)
+
+মিটিংয়ের আগে FULL mode-এ "Run all" করে রাখা (output সহ)। ছোট demo-র জন্য `RUN_MODE = "QUICK"` (~১৫ মিনিট) — কিন্তু QUICK-এর সংখ্যা থিসিসে দেওয়া যাবে না।
+
+| ধাপ | Cell | কী দেখায় |
+|---|---|---|
+| 1 | **1.2** | Problem 1: class distribution (training data) |
+| 2 | **2.5** | Novelty: `kutt*r bacc*` → `kuttar baccha` → `কুত্তার বাচ্চা`, আর `কুত্*ার বাচ্চা` → `কুত্তার বাচ্চা` |
+| 3 | **7.1** | পুরো chain: লুকানো লেখা → class → blockchain-এর EVIDENCE block |
+| 4 | **7.2** | Live: `MY_COMMENT`-এ যেকোনো comment (বাংলা, Romanized, `*` সহ) লিখে চালানো |
+| 5 | **6.3** | Problem 2: প্রতিটা class-এর F1, baseline বনাম improved |
+| 6 | **6.5** | উৎস অনুযায়ী score আর checked label-এ score (label noise দেখানো) |
+| 7 | **8.3 – 8.5** | Requirement: account profile (৫ aspect, time series, risk level) |
+| 8 | **9.1** | Blockchain বদলানো block সাথে সাথে ধরে ফেলে |
+| 9 | **9.3** | Checklist: প্রতিটা requirement-এর এই run-এর ফলাফল |
+
+**Checklist-এ ✘ এলে কী বলবে:** checklist ইচ্ছা করে run-এর আসল ফলাফল থেকে পূরণ হয়, হাতে লেখা নয় — তাই ✘ লুকানো হয় না। ✘-এর পেছনের কারণ (যেমন label noise) নিচে ১৬ আর ১৭ নম্বর অংশে আছে।
+
+### ০.৬ একটা সৎ সতর্কতা: checked test label
+
+`dataset/test_label_check.csv`-এর ৪,০০০টা "checked label" কোনো মানুষ দেয়নি — **একটা LLM (Claude) guideline দেখে দিয়েছে** (DATASHEET-এ স্পষ্ট লেখা আছে, নোটবুক আর README-তেও উল্লেখ করা হয়েছে)। Professor জিজ্ঞেস করলে এটা সরাসরি বলতে হবে। DATASHEET-এর পরামর্শ: ~৩০০টা row দুজন মানুষ দিয়ে label করিয়ে **Cohen's kappa** হিসাব করা — তাহলে test label অনেক বেশি বিশ্বাসযোগ্য হয়।
+- **Sidenote — Cohen's kappa:** দুজন annotator কতটা একমত, সেটা মাপার সংখ্যা — কিন্তু কাকতালীয়ভাবে একমত হওয়ার অংশটা বাদ দিয়ে। ১ = পুরো মিল, ০ = শুধু কাকতালীয় মিল।
+
+> 📌 **এই ফাইলের বাকি অংশে "সেভ করা run" / "শেষ FULL run" লেখা সংখ্যাগুলো সব পুরনো pipeline-এর** (পুরনো dataset, under-sampling)। এগুলো রাখা হয়েছে ইতিহাস আর যুক্তি বোঝার জন্য — নতুন FULL run-এর পর সংখ্যা বদলাবে।
 
 ---
 
@@ -168,23 +241,13 @@ Problem
 
 | Mode | কী হয় | সময় (T4 GPU) | কখন ব্যবহার |
 |---|---|---|---|
-| `"QUICK"` | ৬,০০০ comment, ৩ federated round, BanglaT5 train হয় না | ~১০–১৫ মিনিট | ছোট demo |
-| `"FULL"` | সব comment, ৭ round, BanglaT5 train হয় | ~২–২.৫ ঘণ্টা | **থিসিসের সংখ্যা এখান থেকে নিতে হবে** |
+| `"QUICK"` | ৬,০০০ training comment, ৩ federated round, BanglaT5 train হয় না | ~১৫ মিনিট | কোড ঠিকঠাক চলছে কিনা দেখা / ছোট demo |
+| `"FULL"` | সব training comment, ৭ round, BanglaT5 train হয় | ~২ ঘণ্টা | **থিসিসের সংখ্যা এখান থেকে নিতে হবে** |
 
-3. `Runtime → Run all`।
+3. Cell **1.1**-এ `DATA_VERSION` (`"C"` default) — নিচে ৬ নম্বর অংশে ব্যাখ্যা।
+4. `Runtime → Run all`।
 
-**Supervisor মিটিংয়ে দেখানোর ক্রম** (নোটবুকের demo guide অনুযায়ী):
-
-| ধাপ | Cell | কী দেখায় |
-|---|---|---|
-| 1 | 1.2 | Problem 1: normal comment অনেক বেশি |
-| 2 | 2.5 | Novelty: `kutt*r bacc*` → `kuttar baccha` → `কুত্তার বাচ্চা` |
-| 3 | 7.1 | পুরো chain: লুকানো লেখা → class → blockchain evidence |
-| 4 | 7.2 | Live demo: যেকোনো comment টাইপ করে বিশ্লেষণ |
-| 5 | 6.3 | Problem 2: প্রতিটা class-এর F1, baseline বনাম improved |
-| 6 | 8.3 – 8.5 | Requirement: account profile (৫ aspect, time series, risk) |
-| 7 | 9.1 | Blockchain বদলানো block ধরে ফেলে |
-| 8 | 9.3 | Checklist: প্রতিটা requirement-এর ফলাফল |
+Dataset পড়ার জন্য `GITHUB_TOKEN` secret লাগে (০.৩ দেখো)। মিটিংয়ে দেখানোর ক্রম ০.৫-এ।
 
 ---
 
@@ -192,15 +255,15 @@ Problem
 
 ### কী করা হয়েছে
 - **0.1:** দরকারি library install (`transformers`, `sentencepiece`, `datasets`, `kagglehub`, `scikit-learn`, `seaborn`, `openpyxl`)।
-- **0.2:** সব import আর মূল setting। এটাই একমাত্র cell যেটা সাধারণত বদলাতে হয়।
+- **0.2:** সব import আর মূল setting। সাধারণত শুধু এই cell (আর 1.1-এর `DATA_VERSION`) বদলাতে হয়।
 
 ### মূল setting-গুলো
 
 | Setting | মান | মানে ও কারণ |
 |---|---|---|
 | `RUN_MODE` | `"FULL"` | উপরে ব্যাখ্যা করা হয়েছে। |
-| `SAVE_TO_DRIVE` | `False` | `True` দিলে ফলাফল Google Drive-এ সেভ হয়, Colab বন্ধ হলেও হারায় না। |
-| `SEED` | `42` | প্রতিবার চালালে একই ফলাফল আসার জন্য (reproducibility)। |
+| `SAVE_TO_DRIVE` | `True` | ফলাফল Google Drive-এ (`MyDrive/bangla_forensics_outputs`) সেভ হয়, Colab বন্ধ হলেও হারায় না। `False` দিলে Colab-এর `outputs/` ফোল্ডারে (session শেষে মুছে যায়)। |
+| `SEED` | `42` | প্রতিবার চালালে একই ফলাফল আসার জন্য (reproducibility)। Dataset version তুলনায় 42, 43, 44 (০.২ দেখো)। |
 | `DEVICE` | GPU থাকলে `cuda` | GPU ছাড়া training খুব ধীর, তাই warning দেখায়। |
 | `USE_AMP` | GPU-তে চালু | Mixed precision — GPU-তে training প্রায় ২ গুণ দ্রুত হয়। |
 | `LABELS` | `normal, offensive, cyberbully, hate_speech, violence` | ৫টা class। list-এ অবস্থানই class নম্বর। |
@@ -227,61 +290,90 @@ Problem
 
 সব figure `outputs/figures/`-এ 300 dpi PNG হিসেবে সেভ হয় (থিসিস ডকুমেন্টে বসানোর জন্য)।
 
+(এই ফাইলে `outputs/` লেখা মানে output ফোল্ডার — `SAVE_TO_DRIVE = True` হলে সেটা আসলে `MyDrive/bangla_forensics_outputs/`।)
+
 ---
 
 ## ৬. Section 1 — Dataset লোড করা
 
-### ৪টা public উৎস
+### উৎসগুলো এক নজরে
 
-| Dataset | ভাষা | কী কাজে |
+| Dataset | কী কাজে |
+|---|---|
+| **Forensic dataset** (৭টা public উৎস মিলিয়ে, নিচে বিস্তারিত) | ৫-class classifier train / validation / test |
+| **BanTH** (Romanized বাংলা ↔ বাংলা) | Transliteration শেখা |
+| **Nirmol + ToxLex** (বাংলা গালি শব্দ ও বাক্যাংশ) | লুকানো খারাপ শব্দ unmask করা |
+
+### ১.১ Forensic dataset: ৭টা উৎস → একটা ফাইল → ৫ class
+
+আগে শুধু BanHate + BD-SHS ছিল। এখন `dataset/build_dataset.py` নামে আলাদা একটা script **৭টা public dataset** মিলিয়ে একটা ফাইল বানায়: `data/bangla_forensics_dataset_v1.csv.gz` (~8 MB)। নোটবুক শুধু এই তৈরি ফাইলটা পড়ে।
+
+| Dataset | Platform | Row | ব্যবহার |
+|---|---|---|---|
+| BanHate | YouTube | 19,203 | train / val / test |
+| BD-SHS | social media | 50,281 | train / val / test |
+| Bangla Online Comments (BOC) | Facebook | 44,001 | train / val / test |
+| Belal et al. toxic comments | social media | 16,073 | train / val / test |
+| BLP-2023 VITD | YouTube | 6,046 | train / val / test |
+| TB-OLID (Romanized বাংলা) | Facebook | 5,000 | **শুধু train** |
+| Bangla vulgar corpus | YouTube | 664 | **শুধু train** |
+
+**শেষ দুটো কেন শুধু train-এ?** এগুলো যোগ করা হয়েছে ছোট `offensive` class-কে আরও আসল উদাহরণ দিতে। Validation আর test-এ না দেওয়ায় test set আগের build-এর সাথে হুবহু একই থাকে — পুরনো আর নতুন ফলাফল তুলনা করা যায়।
+
+**`build_dataset.py` কী কী করে (ক্রমানুসারে):**
+1. **Label mapping:** প্রতিটা উৎসের নিজস্ব label (যেমন BOC-এর `religious`, BD-SHS-এর `slander`) একটা লিখিত নিয়ম-বই (`dataset/guideline_v1.md`) অনুযায়ী আমাদের ৫টা class-এ আনা হয়। একাধিক ক্ষতিকর label থাকলে সবচেয়ে গুরুতরটা: violence > hate_speech > cyberbully > offensive।
+   - **মূল নিয়ম (guideline):** শারীরিক ক্ষতির হুমকি/আহ্বান = `violence`; কোনো **গোষ্ঠী-পরিচয়** (ধর্ম, লিঙ্গ, জাতি, দল) আক্রমণ = `hate_speech`; **একজন নির্দিষ্ট মানুষকে** আক্রমণ = `cyberbully`; কাউকে নির্দিষ্ট না করে অশ্লীল/গালি = `offensive`; বাকি সব (সমালোচনা, প্রশ্ন, প্রশংসা) = `normal`।
+2. **Cleaning:** HTML চিহ্ন, অদৃশ্য অক্ষর বাদ; ৪টার কম অক্ষরের লেখা বাদ (293)।
+3. **Duplicate বাদ** (উৎসগুলোর মধ্যেও): 2,615টা। আর যে **473টা comment দুই উৎসে আলাদা label পেয়েছে, সেগুলো পুরো বাদ** — কোনটা ঠিক জানা নেই।
+   - **কেন duplicate বাদ?** একই comment train আর test দুটোতে থাকলে model "মুখস্থ" উত্তর দেয়, ফলাফল মিথ্যা ভালো দেখায়।
+4. **Fixed split** (seed 42, উৎস × label অনুযায়ী stratified): **test 4,000, validation 2,000**, বাকি train। Validation আর test কখনো filter বা balance করা হয় না।
+5. **Label cleaning (শুধু train):** **confident learning** দিয়ে সম্ভাব্য ভুল label খুঁজে বাদ দেওয়া (প্রতিটা class থেকে সর্বোচ্চ 15%)।
+   - **Sidenote — confident learning:** একটা সহজ model (TF-IDF + logistic regression) 5-fold cross-validation-এ প্রতিটা comment-এর জন্য "এটা কোন class হওয়ার সম্ভাবনা কত" বলে। যদি model খুব নিশ্চিতভাবে অন্য class বলে আর দেওয়া label-এর সম্ভাবনা খুব কম হয়, তবে label-টা সম্ভবত ভুল। (Northcutt et al., 2021)
+6. **Balanced core (version C):** প্রতিটা class থেকে সর্বোচ্চ 6,000টা, উৎসগুলো থেকে যতটা সম্ভব সমানভাবে।
+7. **Checked test labels:** test-এর ৪,০০০টা comment আবার guideline দেখে label করা (source label না দেখে, "blind") — এটা LLM দিয়ে করা (০.৬ দেখো)।
+
+**Kept row (split অনুযায়ী):**
+
+| split | normal | offensive | cyberbully | hate_speech | violence | মোট |
+|---|---|---|---|---|---|---|
+| train | 59,946 | 4,353 | 38,270 | 14,990 | 11,076 | 128,635 |
+| validation | 932 | 48 | 603 | 238 | 179 | 2,000 |
+| test | 1,864 | 94 | 1,206 | 477 | 359 | 4,000 |
+
+**`offensive` এত ছোট কেন?** Guideline অনুযায়ী **একজন মানুষকে লক্ষ্য করা** যেকোনো অপমান `cyberbully`-তে যায়; শুধু লক্ষ্যহীন গালি `offensive` থাকে।
+
+### তিনটা dataset version (`DATA_VERSION`, cell 1.1)
+
+Validation আর test তিনটাতেই **একই** — শুধু training data আলাদা:
+
+| Version | Training data | কেন |
 |---|---|---|
-| **BanHate** (YouTube comment) | বাংলা | ৫-class classifier train |
-| **BD-SHS** (social media hate speech, Kaggle) | বাংলা | ৫-class classifier train |
-| **BanTH** | Romanized বাংলা ↔ বাংলা | Transliteration শেখা |
-| **Nirmol + ToxLex** | বাংলা গালি শব্দ ও বাক্যাংশ | লুকানো খারাপ শব্দ unmask করা |
+| **A** | শুধু BanHate + BD-SHS | পুরনো ২-উৎসের setup — তুলনার ভিত্তি |
+| **B** | সব উৎস, সব train row | বেশি data কি সাহায্য করে? |
+| **C** (default) | সব উৎস, সম্ভাব্য ভুল label বাদ, **balanced core** (প্রতি class ≤ 6,000) | পরিষ্কার আর balanced data কি সাহায্য করে? |
 
-### ১.১ Forensic dataset: BanHate + BD-SHS → ৫ class
+তিনটা version-এর তুলনা cell 6.6-এ, প্রতিটা ৩টা seed দিয়ে (০.২ দেখো)।
 
-দুটো dataset-এর নিজস্ব label আলাদা, তাই সেগুলোকে আমাদের ৫টা class-এ রূপান্তর (mapping) করা হয়েছে:
+**Data কোথা থেকে আসে:** dataset ফাইলটা **private** GitHub repo-তে, কারণ দুটো উৎসের (Belal, VITD) license প্রকাশের অনুমতি দেয় না। Cell 1.1 Colab Secret-এ রাখা read-only `GITHUB_TOKEN` দিয়ে GitHub API থেকে ফাইলটা নামায়। Token না থাকলে পরিষ্কার error দেয় (আগের মতো synthetic data বানায় না)।
 
-**BanHate mapping:**
-| মূল category-তে যা আছে | আমাদের class |
-|---|---|
-| category নেই (খালি) | `normal` |
-| "violence" | `violence` |
-| religious / gender / origin / political | `hate_speech` |
-| personal / body shaming | `cyberbully` |
-| বাকি সব | `offensive` |
-
-**BD-SHS mapping:**
-| মূল type | আমাদের class |
-|---|---|
-| callToViolence (এবং এর রূপভেদ) | `violence` |
-| gender, religion_slander, gender_religion_slander | `hate_speech` |
-| slander | `offensive` |
-| খালি | `normal` |
-
-**কেন এই mapping?** গোষ্ঠী (ধর্ম, লিঙ্গ, জাতি, রাজনীতি) লক্ষ্য করে ঘৃণা = hate speech; ব্যক্তিকে লক্ষ্য করে অপমান (চেহারা, ব্যক্তিগত) = cyberbully; সহিংসতার আহ্বান = violence; সাধারণ গালি/অপবাদ = offensive।
-
-তারপর দুটো মিলিয়ে খালি লেখা আর **duplicate বাদ** দেওয়া হয়েছে (একই comment দুবার থাকলে train আর test দুটোতেই চলে যেতে পারে, তাতে ফলাফল কৃত্রিমভাবে ভালো দেখায়)।
-
-**সেভ করা run-এর ফলাফল:** BanHate 19,203 + BD-SHS 40,224 → duplicate বাদে **59,410** comment।
-
-QUICK mode-এ ৬,০০০টা নেওয়া হয় **stratified** ভাবে — মানে class-গুলোর অনুপাত একই থাকে।
-
-**Download ব্যর্থ হলে:** একটা ছোট **synthetic (নকল)** dataset তৈরি হয় যাতে কোড অন্তত চলে, আর বড় করে warning দেখায়। **Synthetic data-র ফলাফল কখনো থিসিসে দেওয়া যাবে না।**
+QUICK mode-এ train থেকে ৬,০০০টা নেওয়া হয় **stratified** ভাবে (class-এর অনুপাত একই রেখে); validation আর test সবসময় পুরো থাকে।
 
 ### ১.২ Class distribution (Problem 1 দেখানো)
 
-| Class | সংখ্যা | শতাংশ |
-|---|---|---|
-| normal | 35,151 | 59.2% |
-| offensive | 9,812 | 16.5% |
-| cyberbully | 2,874 | 4.8% |
-| hate_speech | 5,703 | 9.6% |
-| violence | 5,870 | 9.9% |
+চার্টটা **বেছে নেওয়া version-এর training data** দেখায় (`1_class_distribution.png`)। `build_dataset.py`-এর হিসাব অনুযায়ী:
 
-**`normal` সবচেয়ে ছোট class (cyberbully)-এর চেয়ে 12.2 গুণ বেশি।** এটাই Problem 1। চার্ট সেভ হয় `1_class_distribution.png` নামে।
+| Class | Version B (সব train) | Version C (balanced core) |
+|---|---|---|
+| normal | 59,946 | 6,000 |
+| offensive | 4,353 | 3,701 |
+| cyberbully | 38,270 | 6,000 |
+| hate_speech | 14,990 | 6,000 |
+| violence | 11,076 | 6,000 |
+| **normal ÷ সবচেয়ে ছোট class** | **≈ 13.8x** | **≈ 1.6x** |
+
+**মানে:** পুরো data-য় Problem 1 খুব স্পষ্ট (normal, offensive-এর ~১৪ গুণ)। Version C-তে dataset বানানোর সময়ই imbalance-এর বেশিরভাগ ঠিক হয়ে যায়; বাকিটা (offensive 3,701 → 6,000) Section 4-এর over-sampling ঠিক করে। ফলে version C-তে model **প্রতি class-এ ঠিক ৬,০০০টা** comment দিয়ে train হয়।
+
+(পুরনো ২-উৎসের run-এ: normal 35,151 (59.2%), cyberbully 2,874 (4.8%) — normal সবচেয়ে ছোট class-এর 12.2 গুণ।)
 
 ### ১.৩ Transliteration dataset: BanTH
 
@@ -294,9 +386,9 @@ QUICK mode-এ ৬,০০০টা নেওয়া হয় **stratified** �
 
 **কেন দরকার?** কেউ যখন শব্দ `*` দিয়ে লুকায়, সেটা প্রায় সবসময় একটা খারাপ শব্দ। তাই unmask করার সময় খারাপ শব্দ/বাক্যাংশকে অগ্রাধিকার দেওয়া হয়।
 
-**ToxLex download-এর ব্যবস্থা:** Mendeley প্রায়ই Colab-কে block করে (403)। তাই কোড প্রথমে Mendeley, তারপর GitHub repo-র `data/ToxLex.xlsx` থেকে চেষ্টা করে। ব্রাউজারের মতো User-Agent পাঠানো হয় (কিছু সার্ভার Python-এর default User-Agent block করে)। ফাইলটা আসলেই Excel কিনা তা দেখা হয় — প্রতিটা `.xlsx` ফাইল `PK` দিয়ে শুরু হয়।
+**ToxLex download-এর ব্যবস্থা:** Mendeley প্রায়ই Colab-কে block করে (403)। তাই কোড প্রথমে Mendeley, তারপর private repo-র `data/ToxLex.xlsx` থেকে (cell 1.1-এর একই token দিয়ে) চেষ্টা করে। ব্রাউজারের মতো User-Agent পাঠানো হয় (কিছু সার্ভার Python-এর default User-Agent block করে)। ফাইলটা আসলেই Excel কিনা তা দেখা হয় — প্রতিটা `.xlsx` ফাইল `PK` দিয়ে শুরু হয়।
 
-> ⚠️ **সেভ করা run-এ ToxLex লোড হয়নি:** Mendeley দিয়েছে 403, আর GitHub-এ `data/ToxLex.xlsx` নেই (404)। তাই শুধু Nirmol-এর 1,182টা entry ব্যবহার হয়েছে। সমাধান: ব্রাউজারে ফাইলটা নামিয়ে repo-তে `data/ToxLex.xlsx` নামে রাখা, অথবা Colab-এ `ToxLex.xlsx` নামে upload করা।
+> ⚠️ **সেভ করা run-এ ToxLex লোড হয়নি:** Mendeley দিয়েছে 403, আর repo-তে `data/ToxLex.xlsx` নেই। তাই শুধু Nirmol-এর 1,182টা entry ব্যবহার হয়েছে। সমাধান ০.৩-এ। ToxLex না পেলেও নোটবুক থামে না — শুধু Nirmol দিয়ে চলে।
 
 এছাড়া কয়েকটা **seed শব্দ** হাতে লেখা আছে (`kutta → কুত্তা`, `kuttar → কুত্তার`, `baccha → বাচ্চা`, `shala → শালা`, `harami → হারামি` ইত্যাদি), যাতে download ব্যর্থ হলেও novelty-র উদাহরণগুলো সবসময় কাজ করে।
 
@@ -408,7 +500,7 @@ QUICK mode-এ ৬,০০০টা নেওয়া হয় **stratified** �
 তারপর **পুরো forensic dataset একইভাবে normalise করা হয়** (`clean_text` কলামে)।
 **কেন?** Training-এর সময় model যে ধরনের লেখা দেখে, পরে ব্যবহারের সময়ও সেই ধরনের লেখা পেতে হবে — না হলে model বিভ্রান্ত হয়।
 
-**একটা লক্ষ্য করার বিষয়:** real dataset-এ মাত্র **123টা** comment-এ `*` আছে আর মাত্র **2টা** পুরোপুরি Romanized। অর্থাৎ training data-তে এগুলো কম; novel অংশের আসল কাজ হলো **বাস্তব social media থেকে আসা নতুন input**-এ (যেখানে এগুলো অনেক বেশি)।
+**একটা লক্ষ্য করার বিষয়:** পুরনো ২-উৎসের dataset-এ মাত্র **123টা** comment-এ `*` ছিল আর মাত্র **2টা** পুরোপুরি Romanized (নতুন dataset-এ TB-OLID-এর কারণে Romanized comment অনেক বেশি থাকবে — নতুন run-এ cell 2.5 সংখ্যাটা দেখাবে)। অর্থাৎ training data-তে এগুলো কম; novel অংশের আসল কাজ হলো **বাস্তব social media থেকে আসা নতুন input**-এ (যেখানে এগুলো অনেক বেশি)।
 
 ---
 
@@ -455,39 +547,38 @@ Blockchain হলো **block-এর একটা তালিকা**। প্�
 
 ## ৯. Section 4 — Class imbalance ঠিক করা (Problem 1)
 
-### ৪.১ Train / Validation / Test ভাগ (stratified)
+### ৪.১ Train / Validation / Test ভাগ (dataset ফাইলেই স্থির)
 
-1. **80% train / 20% test।** Test set-এ **আসল class distribution** থাকে, কিছুই বদলানো হয় না।
-2. Train-এর **10%** আলাদা করে **validation set** রাখা হয়।
+ভাগটা নোটবুকে হয় না — `build_dataset.py` একবারই করে ফাইলে লিখে রাখে (`split` কলাম)। নোটবুক শুধু পড়ে:
 
-সেভ করা run: **Train 42,775 | Validation 4,753 | Test 11,882**।
+| | সংখ্যা | কাজ |
+|---|---|---|
+| **Train** | version অনুযায়ী (C-তে ~27,700) | model শেখানো |
+| **Validation** | 2,000 | সেরা federated round বাছাই + threshold tuning |
+| **Test** | 4,000 | একদম শেষে একবার — সৎ মূল্যায়ন |
 
-**কেন stratified?** প্রতিটা ভাগে class-গুলোর অনুপাত একই থাকে, যাতে ছোট class (cyberbully) কোনো ভাগে হারিয়ে না যায়।
+**কেন ফাইলে স্থির?** তিনটা dataset version (A, B, C) আর সব seed-এ validation/test **হুবহু একই** থাকে — তাই তুলনা ন্যায্য। নোটবুকে প্রতিবার নতুন করে ভাগ করলে প্রতিটা run আলাদা test set পেত।
 
-**কেন test set অছোঁয়া?** বাস্তবে social media-তে normal comment-ই বেশি। Test set বদলালে score কৃত্রিমভাবে ভালো দেখাত — এটা অসৎ হতো।
+**কেন stratified (উৎস × label)?** প্রতিটা ভাগে প্রতিটা উৎস আর class-এর অনুপাত একই থাকে, যাতে ছোট class (offensive: test-এ মাত্র 94টা) কোনো ভাগে হারিয়ে না যায়।
 
-**Validation set কেন?** সেরা federated round বাছাই আর threshold tuning — এসব সিদ্ধান্ত test set দেখে নিলে test score আর নিরপেক্ষ থাকে না। তাই আলাদা validation set।
+**কেন test set অছোঁয়া?** বাস্তবে normal comment-ই বেশি। Test set balance করলে score কৃত্রিমভাবে ভালো দেখাত — এটা অসৎ হতো।
+
+**Validation set কেন?** সেরা round বাছাই আর threshold tuning — এসব সিদ্ধান্ত test set দেখে নিলে test score আর নিরপেক্ষ থাকে না।
 
 ### ৪.২ Over-sampling (শুধু training set-এ, প্রতিটা client-এর ভেতরে)
 
 - প্রথমে training data ৩টা client-এ ভাগ করা হয় (`split_into_clients`)। Baseline আর improved — দুই run-ই **একই client ভাগ** ব্যবহার করে।
-- প্রতিটা client **নিজের data-তেই** balance করে — কোনো comment এক client থেকে অন্য client-এ যায় না (federated learning-এর নিয়ম)।
 - `split_into_clients`: আগে label অনুযায়ী সাজিয়ে তাস বাটার মতো একে একে দেওয়া হয় — ফলে প্রতিটা client-এর class mix প্রায় একই।
-- **কোনো comment বাদ দেওয়া হয় না।** ছোট ক্ষতিকর class-গুলোর comment বারবার (copy করে) রাখা হয়, যতক্ষণ না প্রতিটা class সবচেয়ে বড় ক্ষতিকর class-এর অন্তত **75%** হয় (`OVERSAMPLE_TO = 0.75`)।
+- প্রতিটা client **নিজের data-তেই** balance করে — কোনো comment এক client থেকে অন্য client-এ যায় না (federated learning-এর নিয়ম)।
+- **কোনো comment বাদ দেওয়া হয় না।** ছোট ক্ষতিকর class-এর comment copy করে বারবার রাখা হয়, যতক্ষণ না সেটা **সবচেয়ে বড় ক্ষতিকর class-এর সমান** হয় (`OVERSAMPLE_TO = 1.0`) — কিন্তু কোনো class তার নিজের আকারের **৩ গুণের বেশি** হয় না (`MAX_OVERSAMPLE = 3`)।
 
-| Class | আগে (৩ client মিলিয়ে) | পরে |
-|---|---|---|
-| normal | 25,309 | 25,309 (সব রাখা) |
-| offensive | 7,065 | 7,065 |
-| cyberbully | 2,069 | ≈ 5,298 (≈ 2.6 গুণ) |
-| hate_speech | 4,106 | ≈ 5,298 |
-| violence | 4,226 | ≈ 5,298 |
+**Version C-তে কী হয় (হিসাব):** প্রতিটা client পায় ~2,000 normal, ~1,234 offensive, ~2,000 করে বাকি class। Offensive 1,234 → 2,000 (×1.6, ৩ গুণের নিচে)। ফলে **প্রতি class ঠিক সমান** — imbalance 1.6x → 1.0x।
 
-**Imbalance: 12.2x → ≈ 4.8x** (হিসাব করে যাচাই করা; FULL run-এর পর চার্ট `2_balancing.png`-এ আসল সংখ্যা আসবে)।
+**Version B-তে:** cyberbully সবচেয়ে বড় ক্ষতিকর class (38,270)। Offensive (4,353) সর্বোচ্চ ৩ গুণ = 13,059 পর্যন্ত বাড়ে — পুরো সমান হয় না, কারণ ৮ গুণ copy করলে model ওই কয়েকটা comment মুখস্থ করে ফেলত (overfitting)। এজন্যই `MAX_OVERSAMPLE`।
 
-**কেন আগের under-sampling বাদ দেওয়া হলো?** আগে `normal` comment কমিয়ে ফেলা হতো (সর্বোচ্চ 2 × সবচেয়ে বড় ক্ষতিকর class, অর্থাৎ 25,309 → 14,130)। দুটো FULL run-এই এতে macro F1 baseline-এর সমান থেকে গেছে (0.6286 বনাম 0.6277, আর 0.6308 বনাম 0.6302)। কারণ: model ~11,000টা normal উদাহরণ হারাত, আর threshold tuning সেই ঝোঁক প্রায় পুরোটা উল্টে দিত (সব ক্ষতিকর class-এর bias ঋণাত্মক এসেছিল)। Over-sampling-এ কোনো data হারায় না।
+**কেন আগের under-sampling বাদ দেওয়া হলো?** আগে `normal` comment কমিয়ে ফেলা হতো (25,309 → 14,130)। পুরনো dataset-এর দুটো FULL run-এই এতে macro F1 baseline-এর সমান থেকে গেছে (0.6286 বনাম 0.6277, আর 0.6308 বনাম 0.6302)। কারণ: model ~11,000টা normal উদাহরণ হারাত, আর threshold tuning সেই ঝোঁক প্রায় পুরোটা উল্টে দিত (সব ক্ষতিকর class-এর bias ঋণাত্মক এসেছিল)। Over-sampling-এ কোনো data হারায় না। (নোটবুকে এটা এখন এক লাইনে "preliminary runs" হিসেবে লেখা।)
 
-**কেন পুরো সমান (100%) না, 75%?** Cyberbully-কে পুরো সমান করতে গেলে একই comment অনেকবার দেখতে হতো — model সেগুলো মুখস্থ করে ফেলত (overfitting)।
+**`OVERSAMPLE_TO` 0.75 থেকে 1.0 কেন?** Version C-তে offensive-কে পুরো সমান করতে মাত্র ×1.6 copy লাগে — মুখস্থ হওয়ার ঝুঁকি কম। আর মুখস্থ ঠেকানোর কাজটা এখন `MAX_OVERSAMPLE = 3` করে।
 
 ### Class weight কেন বন্ধ (`USE_CLASS_WEIGHTS = False`)
 
@@ -568,7 +659,7 @@ Final model আর তার bias সেভ হয় `outputs/final_classifier/
 
 টেবিলে থাকে: `baseline_F1`, `oversampled_F1`, `improved_F1`, আর `change` (improved − baseline), সাথে MACRO F1 আর ACCURACY। সেভ হয় `per_class_f1.csv` আর `3_per_class_f1.png`।
 
-**কেন macro F1, শুধু accuracy না?** Accuracy বিভ্রান্তিকর: ৫৯% data normal, তাই সবকিছুকে "normal" বললেও accuracy ৫৯%! Macro F1 হলো ৫টা class-এর F1-এর সাধারণ গড় — ছোট class খারাপ করলে এটা কমে যায়। Problem 2 ঠিক এটাই চায়: **প্রতিটা class** ভালো করা।
+**কেন macro F1, শুধু accuracy না?** Accuracy বিভ্রান্তিকর: test set-এর ~৪৭% normal (পুরনো dataset-এ ৫৯%), তাই সবকিছুকে "normal" বললেও accuracy ~৪৭%! Macro F1 হলো ৫টা class-এর F1-এর সাধারণ গড় — ছোট class খারাপ করলে এটা কমে যায়। Problem 2 ঠিক এটাই চায়: **প্রতিটা class** ভালো করা।
 
 ### ৬.৪ Round-ভিত্তিক macro F1 আর confusion matrix
 
@@ -576,9 +667,23 @@ Final model আর তার bias সেভ হয় `outputs/final_classifier/
 - Test set-এ confusion matrix — কোন class-কে কোন class ভেবে ভুল করছে তা দেখায়।
 - চার্ট: `4_rounds_and_confusion_matrix.png`।
 
-### সেভ করা run-এ ফলাফল
+### ৬.৫ উৎস অনুযায়ী score + checked label-এ score + run সেভ
 
-> ⚠️ **গুরুত্বপূর্ণ:** নিচের সংখ্যাগুলো **under-sampling-এর সাথে শেষ FULL run-এর** (৭ round, class weight বন্ধ, threshold tuning চালু)। এখন কোডে **over-sampling** — তাই আবার **FULL mode-এ চালিয়ে নতুন সংখ্যা** থিসিসে ব্যবহার করতে হবে।
+তিনটা কাজ:
+- **(a) উৎস অনুযায়ী macro F1:** test set-এর প্রতিটা উৎসে (BanHate, BD-SHS, BOC, Belal, VITD) আলাদা score। যে উৎসে যে class আছে শুধু সেগুলো ধরা হয় (যেমন VITD-তে শুধু normal আর violence)। **কেন?** কোন উৎসে model দুর্বল তা দেখা যায় — সাধারণত যে উৎসের label নিয়ম guideline থেকে বেশি আলাদা।
+- **(b) Checked label-এ score:** একই prediction-কে দুইভাবে মাপা হয় — উৎসের দেওয়া label দিয়ে, আর guideline দেখে আবার দেওয়া (checked) label দিয়ে। সাথে দেখায় দুই label কত ভাগ মেলে (build-এর হিসাবে **67.8%**)।
+  - **কেন দরকার?** উৎসের label-ই যদি এক-তৃতীয়াংশ ক্ষেত্রে guideline-এর সাথে না মেলে, তবে model "ভুল" করছে মনে হলেও আসলে label-টাই হয়তো ভুল। Checked label-এ score বেশি এলে বোঝা যায় সীমাবদ্ধতা model-এ নয়, data-য়।
+  - সবচেয়ে কম মিল `hate_speech`-এ (মাত্র 16.1%) — যেমন BOC-এর `religious` comment-গুলো আসলে ধর্ম নিয়ে কথা বা ব্যক্তিকে অপমান, ধর্মীয় গোষ্ঠীকে আক্রমণ নয় (বিস্তারিত `dataset/DATASHEET.md`)।
+- **(c) Run সেভ:** `runs/{version}_seed{seed}_{mode}.json` — 6.6-এর তুলনার জন্য।
+
+### ৬.৬ Dataset version তুলনা (A / B / C)
+
+`runs/` ফোল্ডারের সব সেভ করা run পড়ে (শুধু একই RUN_MODE-এর — QUICK আর FULL কখনো মেশানো হয় না), প্রতিটা version-এর জন্য macro F1 আর প্রতিটা class-এর F1-এর **mean ± std** দেখায়। ফাইল: `dataset_version_comparison.csv`।
+- **Sidenote — mean ± std:** mean = গড়; std (standard deviation) = seed বদলালে ফলাফল গড় থেকে কতটা ছড়িয়ে যায়। উদাহরণ: C = 0.70 ± 0.004 আর B = 0.69 ± 0.005 হলে পার্থক্য (0.01) ছড়ানোর প্রায় দ্বিগুণ — মোটামুটি আসল। কিন্তু 0.002 পার্থক্য হলে সেটা noise।
+
+### সেভ করা run-এ ফলাফল (পুরনো dataset)
+
+> ⚠️ **গুরুত্বপূর্ণ:** নিচের সংখ্যাগুলো **পুরনো ২-উৎসের dataset (BanHate + BD-SHS) আর under-sampling-এর শেষ FULL run-এর** (৭ round, class weight বন্ধ, threshold tuning চালু)। এখন dataset, split আর balancing সব বদলেছে — তাই **FULL mode-এ আবার চালিয়ে নতুন সংখ্যা** থিসিসে ব্যবহার করতে হবে (০.১)।
 
 শেষ run-এর test set ফলাফল:
 
@@ -794,6 +899,8 @@ Evidence blocks  : 33 blocks
 |---|---|
 | `outputs/forensic_blockchain.json` | পুরো blockchain |
 | `outputs/per_class_f1.csv` | Per-class F1 টেবিল |
+| `outputs/runs/*.json` | প্রতিটা run-এর score (version, seed, mode অনুযায়ী) |
+| `outputs/dataset_version_comparison.csv` | Version A/B/C-এর mean ± std |
 | `outputs/user_activity_analysed.csv` | প্রতিটা activity-র বিশ্লেষণ |
 | `outputs/user_profiles.json` | সব user profile |
 | `outputs/user_profiles_summary.csv` | Profile সারাংশ টেবিল |
@@ -840,11 +947,17 @@ Evidence blocks  : 33 blocks
 | Transliteration-এ অভিধান আগে, T5 শেষে | অভিধান দ্রুত ও নির্ভরযোগ্য; T5 ধীর আর মাঝে মাঝে বানিয়ে লেখে। |
 | Spelling key | একই শব্দের নানা বানান (bh/v, sh/s…) এক করা। |
 | পুরো dataset-ও normalise | Training আর ব্যবহারের সময় লেখা একই রকম থাকতে হবে। |
-| Duplicate বাদ | Train আর test-এ একই comment থাকলে ফলাফল মিথ্যা ভালো দেখায়। |
-| Stratified split, test অছোঁয়া | সৎ মূল্যায়ন — বাস্তব distribution-এ পরীক্ষা। |
+| ৭টা উৎস, একটা লিখিত guideline | একটা ছোট dataset-এর চেয়ে বেশি আর বৈচিত্র্যময় data; সব উৎসের label একই নিয়মে আনা। |
+| দুই উৎসে আলাদা label পাওয়া comment পুরো বাদ | কোন label ঠিক জানা নেই — রাখলে model-কে পরস্পরবিরোধী শিক্ষা দেওয়া হতো। |
+| Duplicate বাদ (উৎসগুলোর মধ্যেও) | Train আর test-এ একই comment থাকলে ফলাফল মিথ্যা ভালো দেখায়। |
+| নতুন দুই উৎস শুধু train-এ | Offensive-এর উদাহরণ বাড়ে, কিন্তু test set আগের মতোই থাকে। |
+| Split dataset ফাইলে স্থির, test অছোঁয়া | সব version আর seed-এ একই test — ন্যায্য তুলনা আর সৎ মূল্যায়ন। |
+| Confident learning দিয়ে ভুল label বাদ (শুধু train, ≤15%) | ভুল label model-কে ভুল শেখায়; test-এ হাত দিলে মূল্যায়ন অসৎ হতো। |
+| ৩টা dataset version × ৩টা seed | কোন data সিদ্ধান্ত আসলে কাজে লাগে, তা noise থেকে আলাদা করা। |
+| Checked label-এও score | Label noise কতটা, আর সেটা score-কে কতটা নামায় — দেখানো। |
 | শুধু training-এ over-sampling, প্রতিটা client-এর ভেতরে | ছোট class-কে বেশি দেখানো, কোনো data না হারিয়ে; data client ছেড়ে যায় না; test সৎ থাকে। |
 | Under-sampling বাদ | দুই FULL run-এ macro F1 বাড়েনি, আর ~11,000 normal উদাহরণ হারাত। |
-| `OVERSAMPLE_TO = 0.75` (1.0 না) | একই cyberbully comment খুব বেশিবার দেখালে model মুখস্থ করে ফেলে। |
+| `OVERSAMPLE_TO = 1.0`, কিন্তু `MAX_OVERSAMPLE = 3` | Version C-তে সব class পুরো সমান হয়; আর কোনো ছোট class ৩ গুণের বেশি copy হয় না, তাই মুখস্থ (overfitting) হয় না। |
 | Class weight বন্ধ | Re-sampling-এর সাথে দিলে দ্বিগুণ সংশোধন → অনেক false "harmful"। |
 | Threshold tuning validation-এ | Imbalance-এর বাকি প্রভাব ঠিক করা, test নিরপেক্ষ রেখে। |
 | Macro F1 দিয়ে সেরা round বাছাই | Problem 2 প্রতিটা class নিয়ে; accuracy imbalance-এ বিভ্রান্তিকর। |
@@ -872,14 +985,15 @@ Evidence blocks  : 33 blocks
 - Blockchain পরিবর্তন সাথে সাথে ধরে ফেলে।
 
 **যা মনে রাখতে হবে:**
-1. **নোটবুকের সেভ করা output under-sampling-এর শেষ run-এর।** বর্তমান কোড (over-sampling, নতুন risk সূত্র) FULL mode-এ আবার চালিয়ে নতুন সংখ্যা নিতে হবে (~২–২.৫ ঘণ্টা)।
-2. **এখন পর্যন্ত কোনো imbalance পদ্ধতিতে macro F1 বাড়েনি।** Under-sampling + class weight: 0.6286 → 0.6277; under-sampling + threshold: 0.6308 → 0.6302 — দুটোই noise-এর মধ্যে। Over-sampling এখনো পরীক্ষা হয়নি; এটাও কাজ না করলে থিসিসে সৎভাবে লিখতে হবে যে এই dataset-এ সীমাবদ্ধতা imbalance নয়, label-এর মিল না থাকা।
-3. **Cyberbully-র F1 কম (~0.35)।** শুধু ছোট class বলে না — normal থেকে ভুল করে আসা (263) ঠিক ধরার (225) চেয়ে বেশি, আর hate_speech-এর সাথে গুলিয়ে যায়। দুই dataset-এর label-এর নিয়ম আলাদা হওয়া সম্ভাব্য কারণ।
-4. **ToxLex লোড হয়নি** — `data/ToxLex.xlsx` repo-তে যোগ করতে হবে।
+1. **নোটবুকে এখন কোনো output নেই** (পুরনো output বর্তমান কোডের সাথে মিলত না)। FULL mode-এ আবার চালিয়ে output সহ সেভ করতে হবে (~২ ঘণ্টা, ০.১)।
+2. **পুরনো dataset-এ কোনো imbalance পদ্ধতিতে macro F1 বাড়েনি।** Under-sampling + class weight: 0.6286 → 0.6277; under-sampling + threshold: 0.6308 → 0.6302 — দুটোই noise-এর মধ্যে। নতুন dataset (version C) আর over-sampling এখনো FULL-এ পরীক্ষা হয়নি। এবারও না বাড়লে থিসিসে সৎভাবে লিখতে হবে যে সীমাবদ্ধতা imbalance নয়, **label noise** — আর সেটার প্রমাণ এখন হাতে আছে: উৎসের label আর checked label মাত্র 67.8% মেলে।
+3. **পুরনো run-এ cyberbully-র F1 কম ছিল (~0.35)।** normal থেকে ভুল করে আসা (263) ঠিক ধরার (225) চেয়ে বেশি ছিল, আর hate_speech-এর সাথে গুলিয়ে যেত। নতুন guideline-এ "একজন মানুষকে আক্রমণ = cyberbully" নিয়মটা স্পষ্ট করা হয়েছে; নতুন dataset-এ cyberbully অনেক বড় (38,270 train) — নতুন run-এ বদলাবে বলে আশা।
+4. **ToxLex এখনো লোড হয় না** — `data/ToxLex.xlsx` repo-তে যোগ করতে হবে (০.৩)।
 5. **User-রা simulated।** আসল public data (আইনসম্মত) দিয়ে পরীক্ষা করলে থিসিস আরও শক্তিশালী হবে।
 6. **Federated learning একটা GPU-তেই simulate করা**, আর client-দের data সমান ভাগ করা (IID)। বাস্তবে প্রতিষ্ঠানগুলোর data আলাদা ধরনের হতে পারে (non-IID), তখন ফল খারাপ হতে পারে।
 7. **Blockchain একটা local ফাইল, একটাই node।** যার হাতে ফাইল আছে সে চাইলে পুরো chain নতুন করে বানাতে পারে (difficulty মাত্র "00")। বাস্তবে একাধিক পক্ষের কাছে কপি রাখা বা শেষ hash-টা কোথাও নিরাপদে প্রকাশ করা দরকার।
-8. **Training data-য় লুকানো/Romanized comment খুব কম** (123 আর 2)। Novel অংশের আসল উপকার নতুন বাস্তব input-এ।
+8. **Training data-য় লুকানো comment খুব কম** (পুরনো dataset-এ 123টা)। Novel অংশের আসল উপকার নতুন বাস্তব input-এ।
+11. **Checked test label একটা LLM-এর দেওয়া, মানুষের নয়** (০.৬)। থিসিসে এটা স্পষ্ট লিখতে হবে।
 9. **Unmasker VOCAB-নির্ভর** — একদম নতুন শব্দ (vocab-এ নেই) unmask হবে না।
 10. **Risk score-এর ওজন (0.5 / 0.3 / 0.2) হাতে ঠিক করা।** সীমাগুলো (13, 32.5) 20% আর 50% ক্ষতিকর activity থেকে হিসাব করা, আর 20%-এর কারণ classifier-এর মাপা false positive হার — তবুও আসল labelled user data দিয়ে calibrate করা নয়।
 
@@ -888,7 +1002,7 @@ Evidence blocks  : 33 blocks
 ## ১৭. Supervisor-এর সম্ভাব্য প্রশ্ন ও উত্তর
 
 **প্রশ্ন: Accuracy কমলে তবুও improved বলবে কেন?**
-উত্তর: ৫৯% data normal, তাই accuracy মূলত normal-এর ফল দেখায়। আমাদের লক্ষ্য প্রতিটা class — তাই macro F1 আর per-class F1 দেখি। তবে সতর্কতা: এই data-য় baseline সবকিছুকে "normal" বলে **না** (normal recall 0.85) — তাই macro F1 না বাড়লে শুধু accuracy কমা দিয়ে improved দাবি করা যাবে না।
+উত্তর: test set-এর প্রায় অর্ধেক (~৪৭%) normal, তাই accuracy মূলত normal-এর ফল দেখায়। আমাদের লক্ষ্য প্রতিটা class — তাই macro F1 আর per-class F1 দেখি। তবে সতর্কতা: এই data-য় baseline সবকিছুকে "normal" বলে **না** (পুরনো run-এ normal recall 0.85) — তাই macro F1 না বাড়লে শুধু accuracy কমা দিয়ে improved দাবি করা যাবে না।
 
 **প্রশ্ন: Imbalance ঠিক করেও macro F1 বাড়েনি কেন?**
 উত্তর: Confusion matrix দেখায়, বড় ভুলগুলো class-এর সংখ্যার কারণে নয় — normal comment-কে ক্ষতিকর বলা আর cyberbully/hate_speech গুলিয়ে ফেলা। দুই dataset (BanHate, BD-SHS) আলাদা নিয়মে label দিয়েছে, তাই একই ধরনের comment দুই জায়গায় আলাদা label পেতে পারে। Pretrained BanglaBERT আর macro F1 দিয়ে সেরা round বাছাই — এই দুটোই মাঝারি imbalance (12x) নিজেই অনেকটা সামলে নেয়।
@@ -910,6 +1024,18 @@ Evidence blocks  : 33 blocks
 
 **প্রশ্ন: Facebook data কোথা থেকে?**
 উত্তর: নোটবুক scrape করে না। আইনসম্মতভাবে সংগ্রহ করা public data CSV-তে দিলে কাজ করে; demo-তে test set-এর আসল comment দিয়ে simulated account।
+
+**প্রশ্ন: এতগুলো dataset মেলালে label-এর মিল থাকে কীভাবে?**
+উত্তর: একটা লিখিত guideline (`dataset/guideline_v1.md`) দিয়ে প্রতিটা উৎসের প্রতিটা label-কে আমাদের ৫ class-এ আনা হয়েছে; দুই উৎসে আলাদা label পাওয়া comment বাদ; train-এ সম্ভাব্য ভুল label confident learning দিয়ে বাদ। তবুও মিল নিখুঁত না — checked test label-এর সাথে 67.8% মেলে, আর সেটা আমরা লুকাই না, cell 6.5-এ মেপে দেখাই।
+
+**প্রশ্ন: Checked label কে দিয়েছে?**
+উত্তর: একটা LLM (Claude), guideline দেখে, উৎসের label না দেখে (blind)। তাই এটা "gold" label না, দ্বিতীয় একটা মত। পরের ধাপ: ~৩০০টা row দুজন মানুষ দিয়ে label করিয়ে Cohen's kappa দেখা।
+
+**প্রশ্ন: Version C-তে তো data কম (~27,700 বনাম ~128,600) — তবু কেন default?**
+উত্তর: কম কিন্তু পরিষ্কার আর balanced। কোনটা ভালো সেটা অনুমান নয় — cell 6.6-এ A/B/C তিনটাই ৩টা seed দিয়ে তুলনা করা হয়। ফলাফলে B ভালো এলে default বদলানো উচিত।
+
+**প্রশ্ন: Version C তো এমনিতেই balanced — তাহলে Problem 1 কোথায়?**
+উত্তর: আসল data-য় (version B) normal, offensive-এর ~১৪ গুণ — Problem 1 সেখানে স্পষ্ট। Version C হলো তার একটা সমাধান (data স্তরে), আর over-sampling বাকিটা (offensive 3,701 → 6,000) ঠিক করে। Test set-এ কিন্তু আসল অনুপাতই থাকে।
 
 **প্রশ্ন: Model কম নিশ্চিত হলে কী হয়?**
 উত্তর: 0.60-এর কম confidence-এ ক্ষতিকর prediction evidence হয় না, "uncertain (review)" হয় — মানুষ দেখবে। নির্দোষ কাউকে ভুল প্রমাণে দোষী দেখানো এড়াতে।
@@ -955,6 +1081,15 @@ Evidence blocks  : 33 blocks
 | **Time series** | সময় অনুযায়ী সাজানো data। |
 | **Profile vector** | একজন user-কে কয়েকটা সংখ্যায় প্রকাশ। |
 | **Linear fit / slope** | Data-র মধ্য দিয়ে সবচেয়ে মানানসই সরলরেখা / তার ঢাল (বাড়ছে না কমছে)। |
+| **Guideline (labelling)** | কোন comment কোন class পাবে, তার লিখিত নিয়ম-বই — সব উৎসে একই নিয়ম প্রয়োগের জন্য। |
+| **Confident learning** | একটা model-এর cross-validated prediction দেখে সম্ভাব্য ভুল label খুঁজে বের করার পদ্ধতি। |
+| **Cross-validation (5-fold)** | Data ৫ ভাগ করে, প্রতিবার ৪ ভাগে শিখে বাকি ১ ভাগে predict — যাতে প্রতিটা row-এর prediction এমন model থেকে আসে যে ওই row দেখেনি। |
+| **Label noise** | Data-র কিছু label ভুল বা অসঙ্গত — model যত ভালোই হোক, score এর উপরে ওঠা কঠিন। |
+| **Datasheet** | একটা dataset-এর "পরিচয়পত্র": উৎস, license, প্রক্রিয়া, সীমাবদ্ধতা। |
+| **Seed** | Random সংখ্যার শুরুর বিন্দু; একই seed = একই ফলাফল। |
+| **Mean ± std** | কয়েকটা run-এর গড় ± সেগুলো কতটা ছড়ানো। |
+| **IID / non-IID** | সব client-এর data একই ধরনের (IID) / আলাদা ধরনের (non-IID)। |
+| **GitHub token / Colab Secret** | Private repo পড়ার চাবি / Colab-এ চাবিটা নোটবুকে না লিখে লুকিয়ে রাখার জায়গা। |
 | **Synthetic / Simulated data** | কৃত্রিমভাবে বানানো data — কোড পরীক্ষা বা demo-র জন্য। |
 | **False positive** | নিরীহ জিনিসকে ভুল করে ক্ষতিকর বলা। |
 | **Mixed precision (AMP)** | GPU-তে কম precision-এর সংখ্যা ব্যবহার করে দ্রুত training। |

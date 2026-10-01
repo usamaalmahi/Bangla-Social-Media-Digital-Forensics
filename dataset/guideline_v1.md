@@ -65,6 +65,11 @@ then use the first rule that matches (most serious first).
 | VITD (BLP-2023) | non-violence | normal |
 | | direct violence | violence |
 | | passive violence | dropped (mixes abuse and justified violence) |
+| TB-OLID (training only) | not offensive | normal |
+| | offensive, untargeted | offensive |
+| | offensive, at an individual | cyberbully |
+| | offensive, at a group | hate_speech if the group is an identity (religion, nation, ethnicity, party, women, LGBT — keyword list in `build_dataset.py`), otherwise offensive (a team, the police, fans) |
+| Bangla vulgar corpus (training only) | vulgar drama review | offensive |
 
 A comment with several harmful labels gets the most serious one:
 `violence` > `hate_speech` > `cyberbully` > `offensive`.
